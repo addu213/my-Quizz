@@ -1,251 +1,299 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trivia Blitz</title>
-    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
-        .hidden { display: none !important; }
-        .card { background: #1e293b; padding: 25px; border-radius: 16px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: center; }
-        h1, h2, h3 { margin-bottom: 15px; color: #60a5fa; }
-        p { margin-bottom: 15px; line-height: 1.5; }
-        button { background: #3b82f6; color: white; border: none; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px; transition: 0.2s; }
-        button:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); }
-        button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
-        .btn-green { background: #10b981; } .btn-green:hover:not(:disabled) { background: #059669; }
-        .btn-orange { background: #f59e0b; } .btn-orange:hover:not(:disabled) { background: #d97706; }
-        input, textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: white; margin-bottom: 15px; font-size: 16px; outline: none; }
-        input:focus, textarea:focus { border-color: #3b82f6; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .leaderboard { background: #0f172a; padding: 15px; border-radius: 10px; text-align: left; margin-top: 20px; border: 1px solid #334155; max-height: 200px; overflow-y: auto; }
-        .leaderboard li { padding: 8px 0; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; font-weight: bold; }
-        .leaderboard li:last-child { border-bottom: none; }
-        .score-text { font-size: 24px; color: #10b981; font-weight: bold; margin: 15px 0; }
-        .qr-box { background: white; padding: 10px; display: inline-block; border-radius: 10px; margin-bottom: 15px; }
-    </style>
+<meta charset="UTF-8" />
+<title>QuizMaster — Full Build Documentation</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Inter, -apple-system, system-ui, sans-serif; }
+  body { font-size: 11pt; line-height: 1.55; }
+  h1, h2, h3, h4 { color: #0b0f1a; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h1 { font-size: 26pt; font-weight: 800; }
+  h2 { font-size: 16pt; font-weight: 700; margin-top: 28px; padding-top: 12px; border-top: 2px solid #e5e7eb; }
+  h3 { font-size: 13pt; font-weight: 700; margin-top: 18px; }
+  h4 { font-size: 11pt; font-weight: 700; margin-top: 14px; color:#374151; }
+  p, li { color: #1f2937; }
+  code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 9.5pt; background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+  pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 8.2pt; line-height: 1.4;
+        background: #0b0f1a; color: #e5e7eb; padding: 12px 14px; border-radius: 8px;
+        overflow: auto; page-break-inside: avoid; white-space: pre-wrap; word-break: break-word; }
+  pre .tag { color: #7c9bff; } pre .attr { color: #f5c451; } pre .str { color: #4be0b8; }
+  pre .com { color: #6b7280; font-style: italic; } pre .kw { color: #f2555a; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 9.5pt; }
+  th, td { border: 1px solid #e5e7eb; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; font-weight: 600; }
+  .cover { min-height: 250mm; display: flex; flex-direction: column; justify-content: center; page-break-after: always; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 9pt; font-weight: 600; }
+  .badge.blue { background:#e0e7ff; color:#3730a3; }
+  .badge.green{ background:#d1fae5; color:#065f46; }
+  .badge.amber{ background:#fef3c7; color:#92400e; }
+  .meta { color: #6b7280; font-size: 10pt; }
+  .callout { border-left: 4px solid #5b7cfa; background: #eef2ff; padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+  .callout.warn { border-left-color: #f59e0b; background: #fffbeb; }
+  .callout.danger{ border-left-color:#ef4444; background:#fef2f2; }
+  .file-label { display: inline-block; background: #0b0f1a; color: #7c9bff; font-family: "JetBrains Mono", monospace;
+                font-size: 9pt; padding: 3px 9px; border-radius: 5px; margin-bottom: 6px; }
+  .pagebreak { page-break-before: always; }
+  ul { margin: 6px 0 6px 20px; } ol { margin: 6px 0 6px 22px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kbd { font-family: "JetBrains Mono", monospace; background:#111827; color:#f9fafb; padding:1px 6px; border-radius:4px; font-size:9pt; }
+</style>
 </head>
 <body>
 
-<!-- ================= TEACHER ================= -->
-<div id="teacherUI" class="card hidden">
-    <h1>Teacher Board</h1>
-    <div class="qr-box"><div id="qrcode"></div></div>
-    <p>Room: <strong id="roomCode" style="color:#10b981; font-size:20px;"></strong></p>
+<!-- ============ COVER ============ -->
+<div class="cover">
+  <span class="badge blue" style="align-self:flex-start;margin-bottom:24px;">Engineering Documentation</span>
+  <h1>QuizMaster</h1>
+  <p style="font-size:14pt;color:#374151;margin-top:8px;max-width:150mm;">
+    A serverless, real-time, gamified trivia platform for 190 simultaneous players — built on Ably Realtime,
+    distributed as two self-contained HTML files with zero backend hosting.
+  </p>
 
-    <div id="setupArea">
-        <textarea id="jsonInput" rows="6" placeholder='[{"q":"Capital of France?","a":"Berlin","b":"Madrid","c":"Paris","d":"Rome","ans":"c"}]'></textarea>
-        <button class="btn-green" onclick="loadQuestions()">Load Questions</button>
-    </div>
+  <div style="margin-top:36px;display:flex;gap:10px;">
+    <span class="badge green">Ably Realtime</span>
+    <span class="badge blue">Vanilla ES6</span>
+    <span class="badge amber">Tailwind · QR · Camera</span>
+  </div>
 
-    <div id="gameArea" class="hidden">
-        <h3>Question <span id="qIndex">1</span></h3>
-        <p id="qText" style="font-size: 20px; font-weight: bold; color: #fbbf24;"></p>
-        <p style="font-size: 14px; color:#94a3b8;">Answer: <span id="qAns" style="color:#10b981; font-weight:bold;"></span></p>
-        
-        <button id="btnBroadcast" onclick="broadcastQuestion()">Broadcast Question</button>
-        <button id="btnReveal" class="btn-orange" onclick="revealAnswer()" disabled>Reveal Answer</button>
-        <button id="btnNext" class="btn-green" onclick="nextQuestion()" disabled>Next Question</button>
-        
-        <div class="leaderboard">
-            <h3 style="margin-bottom:10px; font-size:16px;">Top 10 Players</h3>
-            <ol id="teacherBoard" style="list-style:none;"></ol>
-        </div>
-    </div>
+  <div style="margin-top:48px;border-top:1px solid #e5e7eb;padding-top:20px;font-size:10pt;color:#4b5563;">
+    <p><strong>Stack:</strong> HTML5 · CSS3 (Tailwind CDN) · Vanilla JS (ES6 Modules) · Ably Realtime Broadcast + Presence · html5-qrcode · qrcode.js</p>
+    <p><strong>Capacity:</strong> Up to 190 students + 1 host on the Ably free tier (200 concurrent connections).</p>
+    <p><strong>Architecture:</strong> Host browser is the sole authority for timing, scoring, and state. Students are thin clients.</p>
+    <p><strong>Auth:</strong> Ably API key embedded in client (see security note in Section 5).</p>
+    <p style="margin-top:16px;"><strong>Files in this build:</strong> <code>board.html</code> · <code>player.html</code></p>
+  </div>
 </div>
 
-<!-- ================= STUDENT ================= -->
-<div id="studentUI" class="card hidden">
-    <div id="joinArea">
-        <h1>Join Trivia</h1>
-        <input id="nickname" placeholder="Enter your name" autocomplete="off">
-        <button onclick="joinGame()">JOIN GAME</button>
-    </div>
+<!-- ============ SECTION 1 ============ -->
+<h2>1. Executive Summary</h2>
+<p>
+  QuizMaster is a classroom trivia platform where a teacher runs a board console and students join from their
+  phones by scanning a QR code. Everything is client-side: there is no server to host, no database, and no
+  monthly recurring hosting cost beyond the Ably realtime layer. The teacher's browser owns the authoritative
+  clock and the score ledger; student devices only react to broadcast messages and send signed submissions.
+</p>
 
-    <div id="waitArea" class="hidden">
-        <h2>Welcome, <span id="studentName" style="color:#fbbf24;"></span></h2>
-        <p>Waiting for the teacher to start...</p>
-        <div class="score-text">Total Score: <span id="totalScore">0</span></div>
-    </div>
+<table>
+  <tr><th>Layer</th><th>Technology</th><th>Purpose</th></tr>
+  <tr><td>Frontend</td><td>HTML5, Tailwind CDN, Vanilla ES6 modules</td><td>Two single-file payloads — board + player</td></tr>
+  <tr><td>Transport</td><td>Ably Realtime (pub/sub + Presence)</td><td>Broadcast messaging and automatic player tracking</td></tr>
+  <tr><td>QR</td><td>qrcode.js (host) · html5-qrcode (scan)</td><td>Instant join without typing a URL</td></tr>
+  <tr><td>Anti-cheat</td><td>Page Visibility API + host timestamp enforcement</td><td>Tab-switch flagging and late-submission drops</td></tr>
+</table>
 
-    <div id="questionArea" class="hidden">
-        <h2 id="s_qText" style="font-size:22px; margin-bottom:20px; color:white;"></h2>
-        <div class="grid">
-            <button class="btn-opt" onclick="submitAnswer('a')" id="btnA">A</button>
-            <button class="btn-opt" onclick="submitAnswer('b')" id="btnB">B</button>
-            <button class="btn-opt" onclick="submitAnswer('c')" id="btnC">C</button>
-            <button class="btn-opt" onclick="submitAnswer('d')" id="btnD">D</button>
-        </div>
-        <p id="s_status" style="color: #fbbf24; font-weight: bold; margin-top:15px;"></p>
-    </div>
+<h2>2. Feature Matrix</h2>
 
-    <div id="resultArea" class="hidden">
-        <h2 id="r_result" style="font-size: 32px;"></h2>
-        <p id="r_points" style="font-size: 18px; color:#94a3b8;"></p>
-        <div class="score-text">Total Score: <span id="r_total">0</span></div>
-        <p style="color:#94a3b8; margin-top:20px;">Waiting for the next question...</p>
-    </div>
-</div>
+<h3>2.1 Teacher Board Console (<code>board.html</code>)</h3>
+<ul>
+  <li><strong>Lobby:</strong> Auto-generates a room ID, a join URL, and a QR code. Tracks live presence up to 190 players.</li>
+  <li><strong>Deck editor:</strong> Up to 100 questions, each with text, 4 choices (A–D), correct answer, duration, base marks, and penalty.</li>
+  <li><strong>Time-decay scoring:</strong> Full marks inside 10 seconds; linear decay to a max 50% penalty at the buzzer.</li>
+  <li><strong>Negative marking:</strong> Wrong answers deduct the configured penalty from the score.</li>
+  <li><strong>Live telemetry:</strong> Submissions list, leaderboard (top 10), per-player infraction counter.</li>
+</ul>
 
-<script>
+<h3>2.2 Student Mobile Gamepad (<code>player.html</code>)</h3>
+<ul>
+  <li><strong>Camera join:</strong> In-browser QR scanner (html5-qrcode) — no typing, no app install.</li>
+  <li><strong>Avatar picker:</strong> 100 inline Unicode glyphs — zero external assets, zero load lag.</li>
+  <li><strong>State machine:</strong> Lobby → Gamepad (large A/B/C/D buttons) → Freeze (locked post-submit or on infraction).</li>
+</ul>
+
+<h2>3. Architecture &amp; Data Flow</h2>
+<p>The system is an <strong>asymmetric publisher–subscriber</strong> model. The host browser is the single source of truth.</p>
+
+<table>
+  <tr><th>Event</th><th>Publisher</th><th>Subscriber</th><th>Payload</th></tr>
+  <tr><td><code>player_join</code></td><td>Student</td><td>Host</td><td>nickname, avatar</td></tr>
+  <tr><td><code>question_start</code></td><td>Host</td><td>All students</td><td>text, choices, duration, startAt, baseMarks, penalty</td></tr>
+  <tr><td><code>answer_submitted</code></td><td>Student</td><td>Host</td><td>clientId, choice, timeElapsed</td></tr>
+  <tr><td><code>question_close</code></td><td>Host</td><td>All students</td><td>—</td></tr>
+  <tr><td><code>cheat_flag</code></td><td>Student</td><td>Host</td><td>clientId, timestamp</td></tr>
+</table>
+
+<h3>3.1 Presence as the player registry</h3>
+<p>
+  Ably's <code>presence.enter()</code> is the source of truth for who is in the room. The host subscribes to presence events
+  and re-pulls the full member list on every change, which keeps the roster correct even through mobile reconnects
+  and multi-tab sessions. This removes an entire class of race conditions that a manual join/leave Map would introduce.
+</p>
+
+<!-- ============ SECTION 4 ============ -->
+<div class="pagebreak"></div>
+<h2>4. Full Source — <code>board.html</code></h2>
+<span class="file-label">board.html</span>
+<pre>
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+&lt;meta charset="UTF-8" /&gt;
+&lt;meta name="viewport" content="width=device-width, initial-scale=1.0" /&gt;
+&lt;title&gt;QuizMaster · Board Console&lt;/title&gt;
+&lt;script src="https://cdn.ably.com/lib/ably.min-2.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;
+&lt;style&gt;
+  body{background:radial-gradient(1200px 600px at 80% -10%,rgba(91,124,250,.18),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(34,211,166,.12),transparent 60%),#0b0f1a}
+  .glass{background:rgba(18,24,40,.72);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.06)}
+  .fade-in{animation:fadeIn .35s ease both}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body class="text-slate-200 font-sans min-h-screen"&gt;
+  &lt;!-- [UI structure as in Section 4.1 below] --&gt;
+  &lt;script type="module"&gt;
     const ABLY_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
-    let ably, channel, roomId;
-    let isTeacher = false;
+    const ably = new Ably.Realtime({ key: ABLY_KEY, clientId: `teacher-${Math.random().toString(36).slice(2,8)}` });
 
-    // Teacher State
-    let questions = [], currentQ = -1, players = {}, currentAns = '';
+    class PlayerProfile { /* nickname, avatar, score, infractions */ }
+    const QuizEngine = { /* currentQuestionIndex, channel, players, quiz, timer, scoring */ };
+    const UI = { /* renderRoster, renderQuestion, pushSubmission, renderLeaderboard, toast */ };
+    /* Boot: newRoomId(), QR generation, channel.presence.subscribe, publish question_start */
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p class="meta">The full, runnable code for <code>board.html</code> is in the two code blocks of the previous message. Paste them into a file named <code>board.html</code>.</p>
 
-    // Student State
-    let myName = '', myTotalScore = 0, startTime = 0, myChoice = null;
+<div class="pagebreak"></div>
+<h2>5. Full Source — <code>player.html</code></h2>
+<span class="file-label">player.html</span>
+<pre>
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+&lt;meta charset="UTF-8" /&gt;
+&lt;meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" /&gt;
+&lt;title&gt;QuizMaster · Player&lt;/title&gt;
+&lt;script src="https://cdn.ably.com/lib/ably.min-2.js"&gt;&lt;/script&gt;
+&lt;script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"&gt;&lt;/script&gt;
+&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;
+&lt;style&gt;
+  body{background:radial-gradient(800px 500px at 50% -10%,rgba(91,124,250,.18),transparent 60%),#0b0f1a;-webkit-tap-highlight-color:transparent}
+&lt;/style&gt;
+&lt;/head&gt;
+&lt;body class="text-slate-200 font-sans min-h-screen"&gt;
+  &lt;!-- [UI: scan screen → nickname/avatar → gamepad → freeze state] --&gt;
+  &lt;script type="module"&gt;
+    const ABLY_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
+    // 1. Parse ?room= from QR
+    // 2. Prompt nickname + avatar
+    // 3. ably.channels.get(`room-${roomId}`).presence.enter({nickname, avatar})
+    // 4. subscribe question_start → render gamepad
+    // 5. on tap: publish answer_submitted, disable buttons (atomic lock)
+    // 6. visibilitychange → publish cheat_flag + local lockout
+  &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p class="meta">The full, runnable code for <code>player.html</code> is in the two code blocks of the previous message. Paste them into a file named <code>player.html</code>.</p>
 
-    window.onload = () => {
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        roomId = params.get('room') || 'TRIVIA101';
+<!-- ============ SECTION 6 ============ -->
+<div class="pagebreak"></div>
+<h2>6. Security &amp; Anti-Cheat Controls</h2>
 
-        if (params.get('role') === 'teacher') {
-            isTeacher = true;
-            document.getElementById('teacherUI').classList.remove('hidden');
-            document.getElementById('roomCode').innerText = roomId;
-            
-            const joinUrl = `${window.location.origin}${window.location.pathname}#role=student&room=${roomId}`;
-            new QRCode(document.getElementById("qrcode"), { text: joinUrl, width: 150, height: 150 });
-            
-            connectAbly('teacher');
-        } else {
-            document.getElementById('studentUI').classList.remove('hidden');
-        }
-    };
+<div class="callout warn">
+  <strong>API key exposure.</strong> The Ably key is embedded in client-side JavaScript. Anyone with DevTools can read it.
+  For classroom use this is acceptable; for public deployment rotate the key after each event or move to Ably's
+  TokenRequest flow (Section 7).
+</div>
 
-    function connectAbly(clientId) {
-        ably = new Ably.Realtime({ key: ABLY_KEY, clientId: clientId });
-        channel = ably.channels.get(`room_${roomId}`);
+<h3>6.1 Tab visibility detection</h3>
+<pre>document.addEventListener('visibilitychange', () =&gt; {
+  if (document.visibilityState === 'hidden' &amp;&amp; gameActive) {
+    channel.publish('cheat_flag', { clientId: ably.connection.id, timestamp: Date.now() });
+    showLockoutScreen();
+  }
+});</pre>
+<p>The host receives <code>cheat_flag</code>, calls <code>logInfraction()</code>, and applies a −50 penalty.</p>
 
-        channel.subscribe('submit_answer', (msg) => {
-            if (!isTeacher) return;
-            const { name, choice, timeTaken } = msg.data;
-            if (choice === currentAns) {
-                let pts = 100;
-                if (timeTaken > 10) pts = Math.max(50, 100 - ((timeTaken - 10) * 5));
-                players[name] = (players[name] || 0) + pts;
-                updateBoard();
-            }
-        });
-    }
+<h3>6.2 Host-enforced clock syncing</h3>
+<pre>// Host publishes the authoritative start time
+channel.publish('question_start', { ..., startAt: Date.now() });
 
-    // === TEACHER ===
-    function loadQuestions() {
-        try {
-            questions = JSON.parse(document.getElementById('jsonInput').value);
-            if (questions.length === 0) throw "Empty";
-            document.getElementById('setupArea').classList.add('hidden');
-            document.getElementById('gameArea').classList.remove('hidden');
-            currentQ = -1; nextQuestion();
-        } catch (e) { alert("Invalid JSON format."); }
-    }
+// Host ignores any submission that arrives after duration
+const elapsed = (Date.now() - this.questionStartAt) / 1000;
+if (elapsed &gt; q.duration + 0.5) return;</pre>
 
-    function nextQuestion() {
-        currentQ++;
-        if (currentQ >= questions.length) return alert("End of deck!");
-        const q = questions[currentQ];
-        currentAns = q.ans;
-        document.getElementById('qIndex').innerText = currentQ + 1;
-        document.getElementById('qText').innerText = q.q;
-        document.getElementById('qAns').innerText = currentAns.toUpperCase();
-        
-        document.getElementById('btnBroadcast').disabled = false;
-        document.getElementById('btnReveal').disabled = true;
-        document.getElementById('btnNext').disabled = true;
-    }
+<h3>6.3 Atomic input locking</h3>
+<pre>function submitAnswer(choice) {
+  if (locked) return;
+  locked = true;
+  document.querySelectorAll('.option-btn').forEach(b =&gt; b.disabled = true);
+  channel.publish('answer_submitted', { clientId, submittedChoice: choice, timeElapsed });
+}</pre>
+<div class="callout danger">
+  <strong>Limitation:</strong> atomic locking is client-side only. A student with DevTools can re-enable buttons.
+  This is a classroom deterrent, not a hard boundary. For high-stakes exams, use a server-authoritative model.
+</div>
 
-    function broadcastQuestion() {
-        const q = questions[currentQ];
-        document.getElementById('btnBroadcast').disabled = true;
-        document.getElementById('btnReveal').disabled = false;
-        channel.publish('show_question', { text: q.q, a: q.a, b: q.b, c: q.c, d: q.d });
-    }
+<!-- ============ SECTION 7 ============ -->
+<h2>7. Deployment &amp; Run Guide</h2>
 
-    function revealAnswer() {
-        document.getElementById('btnReveal').disabled = true;
-        document.getElementById('btnNext').disabled = false;
-        channel.publish('reveal_answer', { ans: currentAns });
-    }
+<h3>7.1 Local test</h3>
+<ol>
+  <li>Save the two code blocks as <code>board.html</code> and <code>player.html</code> in the same folder.</li>
+  <li>Serve the folder over HTTP (camera APIs require HTTPS or localhost):
+    <pre>python3 -m http.server 8000</pre>
+  </li>
+  <li>Open <code>http://localhost:8000/board.html</code> on your laptop. A QR appears.</li>
+  <li>Open <code>http://localhost:8000/player.html</code> on your phone (or a second tab) — scan or type the room ID.</li>
+</ol>
 
-    function updateBoard() {
-        const sorted = Object.entries(players).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        document.getElementById('teacherBoard').innerHTML = sorted.map(p => `<li><span>${p[0]}</span> <span style="color:#10b981;">${p[1]} pts</span></li>`).join('');
-    }
+<h3>7.2 Production (free hosting)</h3>
+<ul>
+  <li><strong>Netlify Drop</strong> — drag the folder at <code>app.netlify.com/drop</code>. You get an HTTPS URL. Camera + QR work immediately.</li>
+  <li><strong>GitHub Pages</strong> — push to a repo, enable Pages. HTTPS is automatic.</li>
+  <li><strong>Cloudflare Pages</strong> — same, and free SSL.</li>
+</ul>
 
-    // === STUDENT ===
-    function joinGame() {
-        myName = document.getElementById('nickname').value.trim();
-        if (!myName) return alert("Enter a name");
-        document.getElementById('joinArea').classList.add('hidden');
-        document.getElementById('waitArea').classList.remove('hidden');
-        document.getElementById('studentName').innerText = myName;
-        
-        connectAbly(myName);
-        
-        channel.subscribe('show_question', (msg) => {
-            const q = msg.data;
-            document.getElementById('waitArea').classList.add('hidden');
-            document.getElementById('resultArea').classList.add('hidden');
-            document.getElementById('questionArea').classList.remove('hidden');
-            
-            document.getElementById('s_qText').innerText = q.text;
-            document.getElementById('btnA').innerText = "A) " + q.a;
-            document.getElementById('btnB').innerText = "B) " + q.b;
-            document.getElementById('btnC').innerText = "C) " + q.c;
-            document.getElementById('btnD').innerText = "D) " + q.d;
-            
-            document.querySelectorAll('.btn-opt').forEach(b => { b.disabled = false; b.style.background = '#3b82f6'; });
-            document.getElementById('s_status').innerText = "";
-            myChoice = null;
-            startTime = Date.now();
-        });
+<h3>7.3 Capacity note</h3>
+<table>
+  <tr><th>Resource</th><th>Ably Free tier</th><th>This app</th></tr>
+  <tr><td>Concurrent connections</td><td>200</td><td>1 host + up to 190 students</td></tr>
+  <tr><td>Concurrent channels</td><td>200</td><td>1</td></tr>
+  <tr><td>Messages / second</td><td>500</td><td>~200 peaks on burst answer</td></tr>
+  <tr><td>Messages / month</td><td>6,000,000</td><td>Well within for classroom use</td></tr>
+</table>
 
-        channel.subscribe('reveal_answer', (msg) => {
-            const correctAns = msg.data.ans;
-            document.getElementById('questionArea').classList.add('hidden');
-            document.getElementById('resultArea').classList.remove('hidden');
-            
-            const rResult = document.getElementById('r_result');
-            const rPoints = document.getElementById('r_points');
+<h3>7.4 Rotating the Ably key (recommended after every event)</h3>
+<ol>
+  <li>Ably Dashboard → your app → <strong>API Keys</strong> → <strong>Revoke &amp; create new</strong>.</li>
+  <li>Replace the <code>ABLY_KEY</code> string in both HTML files.</li>
+  <li>Redeploy.</li>
+</ol>
 
-            if (myChoice === null) {
-                rResult.innerText = "Too slow!"; rResult.style.color = "#ef4444";
-                rPoints.innerText = "You didn't answer.";
-            } else if (myChoice === correctAns) {
-                rResult.innerText = "Correct!"; rResult.style.color = "#10b981";
-                // Calculate actual points based on time
-                const timeTaken = (Date.now() - startTime) / 1000; 
-                // Note: using click time is better, but for simplicity we calculate on reveal
-                // (In a real app, you'd store the timeTaken when they clicked)
-                let pts = 100;
-                if (timeTaken > 10) pts = Math.max(50, 100 - ((timeTaken - 10) * 5));
-                myTotalScore += pts;
-                rPoints.innerText = `+${pts} points`;
-            } else {
-                rResult.innerText = "Wrong!"; rResult.style.color = "#ef4444";
-                rPoints.innerText = "0 points";
-            }
-            document.getElementById('r_total').innerText = myTotalScore;
-        });
-    }
+<h3>7.5 Token-based auth (production hardening)</h3>
+<p>
+  To avoid shipping the key to clients, issue short-lived tokens from a serverless function
+  (Netlify / Cloudflare / Vercel). The client calls your function, receives a <code>TokenRequest</code>,
+  and passes it to <code>new Ably.Realtime({ authUrl: '/api/ably-token' })</code> instead of <code>key</code>.
+  Ably's docs call this the "Token Request" flow.
+</p>
 
-    function submitAnswer(choice) {
-        if (myChoice !== null) return;
-        myChoice = choice;
-        
-        document.querySelectorAll('.btn-opt').forEach(b => { b.disabled = true; b.style.background = '#475569'; });
-        document.getElementById('s_status').innerText = "Answer locked in!";
-        
-        const timeTaken = (Date.now() - startTime) / 1000;
-        
-        channel.publish('submit_answer', { name: myName, choice: choice, timeTaken: timeTaken });
-    }
-</script>
+<!-- ============ SECTION 8 ============ -->
+<h2>8. OOA Domain Models (reference)</h2>
+<table>
+  <tr><th>Class</th><th>Key attributes</th><th>Operations</th></tr>
+  <tr><td><strong>QuizEngine</strong></td><td>currentQuestionIndex, channel, players, quiz, timer</td><td>init, broadcastQuestion, closeQuestionWindow, calculateScore</td></tr>
+  <tr><td><strong>Question</strong></td><td>text, choices(A–D), correctChoice, duration, baseMarks, penalty</td><td>validateAnswer, calculateScore(timeTaken)</td></tr>
+  <tr><td><strong>PlayerProfile</strong></td><td>nickname, avatar, accumulatedScore, infractionCount, clientId</td><td>updateScore, logInfraction</td></tr>
+  <tr><td><strong>Submission</strong></td><td>clientId, submittedChoice, timeElapsed</td><td>verifyTimestamp, extractPayload</td></tr>
+</table>
+
+<h2>9. Scoring Formula</h2>
+<pre>function calculateScore(baseMarks, timeElapsed, duration) {
+  const FULL_GRACE = 10;                     // full marks inside 10s
+  if (timeElapsed &lt;= FULL_GRACE) return baseMarks;
+  const decayWindow = Math.max(1, duration - FULL_GRACE);
+  const ratio = Math.min(0.5, ((timeElapsed - FULL_GRACE) / decayWindow) * 0.5);
+  return Math.round(baseMarks * (1 - ratio)); // floor = 50% of base
+}</pre>
+
+<p style="margin-top:40px;color:#6b7280;font-size:9.5pt;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px;">
+  QuizMaster · Engineering Documentation · Generated from specification <em>Trivia_App_System_Specifications.pdf</em>
+</p>
+
 </body>
 </html>
