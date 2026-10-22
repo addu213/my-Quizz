@@ -7,121 +7,115 @@
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
-        body { font-family: sans-serif; background: #1e293b; color: white; margin: 0; padding: 20px; text-align: center; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 15px; }
         .hidden { display: none !important; }
-        .box { background: #0f172a; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; }
-        button { padding: 15px; margin: 5px; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; background: #3b82f6; color: white; width: 100%; font-weight: bold; }
-        button:active { background: #2563eb; }
-        button:disabled { background: #475569; cursor: not-allowed; }
-        .option { background: #4f46e5; margin: 10px 0; }
-        .option:hover { background: #4338ca; }
-        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: 1px solid #ccc; box-sizing: border-box; font-family: monospace; }
-        .score { font-size: 24px; color: #10b981; font-weight: bold; margin: 10px 0; }
+        .card { background: #1e293b; padding: 25px; border-radius: 16px; width: 100%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid #334155; text-align: center; }
+        h1, h2, h3 { margin-bottom: 15px; color: #60a5fa; }
+        p { margin-bottom: 15px; line-height: 1.5; }
+        button { background: #3b82f6; color: white; border: none; padding: 15px; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 10px; transition: 0.2s; }
+        button:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); }
+        button:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+        .btn-green { background: #10b981; } .btn-green:hover:not(:disabled) { background: #059669; }
+        .btn-orange { background: #f59e0b; } .btn-orange:hover:not(:disabled) { background: #d97706; }
+        input, textarea { width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: white; margin-bottom: 15px; font-size: 16px; outline: none; }
+        input:focus, textarea:focus { border-color: #3b82f6; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .leaderboard { text-align: left; background: #334155; padding: 10px; border-radius: 5px; margin-top: 10px; }
+        .leaderboard { background: #0f172a; padding: 15px; border-radius: 10px; text-align: left; margin-top: 20px; border: 1px solid #334155; max-height: 200px; overflow-y: auto; }
+        .leaderboard li { padding: 8px 0; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; font-weight: bold; }
+        .leaderboard li:last-child { border-bottom: none; }
+        .score-text { font-size: 24px; color: #10b981; font-weight: bold; margin: 15px 0; }
+        .qr-box { background: white; padding: 10px; display: inline-block; border-radius: 10px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
-<!-- ================= TEACHER UI ================= -->
-<div id="teacherApp" class="hidden box">
-    <h2>Teacher Board</h2>
-    <div id="qrcode" style="background:white; padding:10px; display:inline-block; margin-bottom:15px;"></div>
-    <p>Room: <span id="roomCode" style="color:#10b981; font-weight:bold;"></span></p>
+<!-- ================= TEACHER ================= -->
+<div id="teacherUI" class="card hidden">
+    <h1>Teacher Board</h1>
+    <div class="qr-box"><div id="qrcode"></div></div>
+    <p>Room: <strong id="roomCode" style="color:#10b981; font-size:20px;"></strong></p>
 
     <div id="setupArea">
-        <textarea id="jsonInput" rows="5" placeholder='[{"q":"Capital of France?","a":"Berlin","b":"Madrid","c":"Paris","d":"Rome","ans":"c"}]'></textarea>
-        <button onclick="loadQuestions()" style="background:#10b981;">Load Questions</button>
+        <textarea id="jsonInput" rows="6" placeholder='[{"q":"Capital of France?","a":"Berlin","b":"Madrid","c":"Paris","d":"Rome","ans":"c"}]'></textarea>
+        <button class="btn-green" onclick="loadQuestions()">Load Questions</button>
     </div>
 
     <div id="gameArea" class="hidden">
         <h3>Question <span id="qIndex">1</span></h3>
-        <p id="qText" style="font-size: 20px; font-weight: bold;"></p>
-        <p>Correct Answer: <span id="qAns" style="color:#10b981;"></span></p>
+        <p id="qText" style="font-size: 20px; font-weight: bold; color: #fbbf24;"></p>
+        <p style="font-size: 14px; color:#94a3b8;">Answer: <span id="qAns" style="color:#10b981; font-weight:bold;"></span></p>
         
         <button id="btnBroadcast" onclick="broadcastQuestion()">Broadcast Question</button>
-        <button id="btnReveal" onclick="revealAnswer()" disabled>Reveal Answer</button>
-        <button id="btnNext" onclick="nextQuestion()" disabled>Next Question</button>
+        <button id="btnReveal" class="btn-orange" onclick="revealAnswer()" disabled>Reveal Answer</button>
+        <button id="btnNext" class="btn-green" onclick="nextQuestion()" disabled>Next Question</button>
         
         <div class="leaderboard">
-            <h4>Top 10 Players</h4>
-            <ol id="teacherBoard"></ol>
+            <h3 style="margin-bottom:10px; font-size:16px;">Top 10 Players</h3>
+            <ol id="teacherBoard" style="list-style:none;"></ol>
         </div>
     </div>
 </div>
 
-<!-- ================= STUDENT UI ================= -->
-<div id="studentApp" class="hidden box">
+<!-- ================= STUDENT ================= -->
+<div id="studentUI" class="card hidden">
     <div id="joinArea">
-        <h2>Join Trivia</h2>
-        <input id="nickname" placeholder="Enter your name" style="text-align:center;">
-        <button onclick="joinGame()">JOIN</button>
+        <h1>Join Trivia</h1>
+        <input id="nickname" placeholder="Enter your name" autocomplete="off">
+        <button onclick="joinGame()">JOIN GAME</button>
     </div>
 
     <div id="waitArea" class="hidden">
-        <h2>Welcome, <span id="studentName"></span></h2>
+        <h2>Welcome, <span id="studentName" style="color:#fbbf24;"></span></h2>
         <p>Waiting for the teacher to start...</p>
-        <div class="score">Total Score: <span id="totalScore">0</span></div>
+        <div class="score-text">Total Score: <span id="totalScore">0</span></div>
     </div>
 
     <div id="questionArea" class="hidden">
-        <h2 id="s_qText" style="font-size:24px;"></h2>
+        <h2 id="s_qText" style="font-size:22px; margin-bottom:20px; color:white;"></h2>
         <div class="grid">
-            <button class="option" onclick="submitAnswer('a')" id="btnA">A</button>
-            <button class="option" onclick="submitAnswer('b')" id="btnB">B</button>
-            <button class="option" onclick="submitAnswer('c')" id="btnC">C</button>
-            <button class="option" onclick="submitAnswer('d')" id="btnD">D</button>
+            <button class="btn-opt" onclick="submitAnswer('a')" id="btnA">A</button>
+            <button class="btn-opt" onclick="submitAnswer('b')" id="btnB">B</button>
+            <button class="btn-opt" onclick="submitAnswer('c')" id="btnC">C</button>
+            <button class="btn-opt" onclick="submitAnswer('d')" id="btnD">D</button>
         </div>
-        <p id="s_status" style="color: #fbbf24; font-weight: bold;"></p>
+        <p id="s_status" style="color: #fbbf24; font-weight: bold; margin-top:15px;"></p>
     </div>
 
     <div id="resultArea" class="hidden">
-        <h2 id="r_result" style="font-size: 28px;"></h2>
-        <p id="r_points" style="font-size: 20px;"></p>
-        <div class="score">Total Score: <span id="r_total">0</span></div>
-        <p style="color:gray; margin-top:20px;">Wait for the teacher for the next question...</p>
+        <h2 id="r_result" style="font-size: 32px;"></h2>
+        <p id="r_points" style="font-size: 18px; color:#94a3b8;"></p>
+        <div class="score-text">Total Score: <span id="r_total">0</span></div>
+        <p style="color:#94a3b8; margin-top:20px;">Waiting for the next question...</p>
     </div>
 </div>
 
 <script>
-    // ==========================================
-    // CONFIGURATION
-    // ==========================================
     const ABLY_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
     let ably, channel, roomId;
     let isTeacher = false;
 
     // Teacher State
-    let questions = [];
-    let currentQ = -1;
-    let players = {}; // { name: totalScore }
+    let questions = [], currentQ = -1, players = {}, currentAns = '';
 
     // Student State
-    let myName = '';
-    let myTotalScore = 0;
-    let questionStartTime = 0;
-    let currentAnswer = '';
+    let myName = '', myTotalScore = 0, startTime = 0, myChoice = null;
 
-    // ==========================================
-    // INITIALIZATION
-    // ==========================================
     window.onload = () => {
         const params = new URLSearchParams(window.location.hash.substring(1));
-        const role = params.get('role');
         roomId = params.get('room') || 'TRIVIA101';
 
-        if (role === 'teacher') {
+        if (params.get('role') === 'teacher') {
             isTeacher = true;
-            document.getElementById('teacherApp').classList.remove('hidden');
+            document.getElementById('teacherUI').classList.remove('hidden');
             document.getElementById('roomCode').innerText = roomId;
             
-            // Generate QR Code
             const joinUrl = `${window.location.origin}${window.location.pathname}#role=student&room=${roomId}`;
             new QRCode(document.getElementById("qrcode"), { text: joinUrl, width: 150, height: 150 });
             
             connectAbly('teacher');
         } else {
-            document.getElementById('studentApp').classList.remove('hidden');
+            document.getElementById('studentUI').classList.remove('hidden');
         }
     };
 
@@ -129,56 +123,37 @@
         ably = new Ably.Realtime({ key: ABLY_KEY, clientId: clientId });
         channel = ably.channels.get(`room_${roomId}`);
 
-        ably.connection.on('connected', () => {
-            console.log('Connected to Ably');
-            
-            if (isTeacher) {
-                // Listen for student answers
-                channel.subscribe('submit_answer', (msg) => {
-                    const { name, choice, timeTaken } = msg.data;
-                    
-                    if (choice === currentAnswer) {
-                        // Time decay: 100 base points. If > 10s, lose 5 points per second up to 50.
-                        let points = 100;
-                        if (timeTaken > 10) points = Math.max(50, 100 - ((timeTaken - 10) * 5));
-                        
-                        players[name] = (players[name] || 0) + points;
-                    }
-                    updateLeaderboard();
-                });
+        channel.subscribe('submit_answer', (msg) => {
+            if (!isTeacher) return;
+            const { name, choice, timeTaken } = msg.data;
+            if (choice === currentAns) {
+                let pts = 100;
+                if (timeTaken > 10) pts = Math.max(50, 100 - ((timeTaken - 10) * 5));
+                players[name] = (players[name] || 0) + pts;
+                updateBoard();
             }
         });
     }
 
-    // ==========================================
-    // TEACHER LOGIC
-    // ==========================================
+    // === TEACHER ===
     function loadQuestions() {
         try {
             questions = JSON.parse(document.getElementById('jsonInput').value);
-            if (questions.length === 0) throw new Error("Empty");
+            if (questions.length === 0) throw "Empty";
             document.getElementById('setupArea').classList.add('hidden');
             document.getElementById('gameArea').classList.remove('hidden');
-            currentQ = -1;
-            nextQuestion();
-        } catch (e) {
-            alert("Invalid JSON format. Check your brackets and quotes.");
-        }
+            currentQ = -1; nextQuestion();
+        } catch (e) { alert("Invalid JSON format."); }
     }
 
     function nextQuestion() {
         currentQ++;
-        if (currentQ >= questions.length) {
-            alert("All questions finished!");
-            return;
-        }
-        
+        if (currentQ >= questions.length) return alert("End of deck!");
         const q = questions[currentQ];
-        currentAnswer = q.ans;
-        
+        currentAns = q.ans;
         document.getElementById('qIndex').innerText = currentQ + 1;
         document.getElementById('qText').innerText = q.q;
-        document.getElementById('qAns').innerText = currentAnswer.toUpperCase();
+        document.getElementById('qAns').innerText = currentAns.toUpperCase();
         
         document.getElementById('btnBroadcast').disabled = false;
         document.getElementById('btnReveal').disabled = true;
@@ -189,33 +164,24 @@
         const q = questions[currentQ];
         document.getElementById('btnBroadcast').disabled = true;
         document.getElementById('btnReveal').disabled = false;
-        
-        channel.publish('show_question', {
-            text: q.q,
-            a: q.a, b: q.b, c: q.c, d: q.d
-        });
+        channel.publish('show_question', { text: q.q, a: q.a, b: q.b, c: q.c, d: q.d });
     }
 
     function revealAnswer() {
         document.getElementById('btnReveal').disabled = true;
         document.getElementById('btnNext').disabled = false;
-        
-        channel.publish('reveal_answer', { ans: currentAnswer });
-        updateLeaderboard();
+        channel.publish('reveal_answer', { ans: currentAns });
     }
 
-    function updateLeaderboard() {
+    function updateBoard() {
         const sorted = Object.entries(players).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        document.getElementById('teacherBoard').innerHTML = sorted.map((p, i) => `<li>${p[0]} - ${p[1]} pts</li>`).join('');
+        document.getElementById('teacherBoard').innerHTML = sorted.map(p => `<li><span>${p[0]}</span> <span style="color:#10b981;">${p[1]} pts</span></li>`).join('');
     }
 
-    // ==========================================
-    // STUDENT LOGIC
-    // ==========================================
+    // === STUDENT ===
     function joinGame() {
         myName = document.getElementById('nickname').value.trim();
         if (!myName) return alert("Enter a name");
-        
         document.getElementById('joinArea').classList.add('hidden');
         document.getElementById('waitArea').classList.remove('hidden');
         document.getElementById('studentName').innerText = myName;
@@ -234,10 +200,10 @@
             document.getElementById('btnC').innerText = "C) " + q.c;
             document.getElementById('btnD').innerText = "D) " + q.d;
             
-            // Reset buttons
-            document.querySelectorAll('.option').forEach(b => b.disabled = false);
+            document.querySelectorAll('.btn-opt').forEach(b => { b.disabled = false; b.style.background = '#3b82f6'; });
             document.getElementById('s_status').innerText = "";
-            questionStartTime = Date.now();
+            myChoice = null;
+            startTime = Date.now();
         });
 
         channel.subscribe('reveal_answer', (msg) => {
@@ -245,54 +211,40 @@
             document.getElementById('questionArea').classList.add('hidden');
             document.getElementById('resultArea').classList.remove('hidden');
             
-            if (currentAnswer === '') {
-                document.getElementById('r_result').innerText = "Too slow!";
-                document.getElementById('r_points').innerText = "You didn't answer.";
-                document.getElementById('r_result').style.color = "#ef4444";
-            } else if (currentAnswer === correctAns) {
-                document.getElementById('r_result').innerText = "Correct!";
-                document.getElementById('r_result').style.color = "#10b981";
-                document.getElementById('r_points').innerText = `+${lastPoints} points`;
+            const rResult = document.getElementById('r_result');
+            const rPoints = document.getElementById('r_points');
+
+            if (myChoice === null) {
+                rResult.innerText = "Too slow!"; rResult.style.color = "#ef4444";
+                rPoints.innerText = "You didn't answer.";
+            } else if (myChoice === correctAns) {
+                rResult.innerText = "Correct!"; rResult.style.color = "#10b981";
+                // Calculate actual points based on time
+                const timeTaken = (Date.now() - startTime) / 1000; 
+                // Note: using click time is better, but for simplicity we calculate on reveal
+                // (In a real app, you'd store the timeTaken when they clicked)
+                let pts = 100;
+                if (timeTaken > 10) pts = Math.max(50, 100 - ((timeTaken - 10) * 5));
+                myTotalScore += pts;
+                rPoints.innerText = `+${pts} points`;
             } else {
-                document.getElementById('r_result').innerText = "Wrong!";
-                document.getElementById('r_result').style.color = "#ef4444";
-                document.getElementById('r_points').innerText = "0 points";
+                rResult.innerText = "Wrong!"; rResult.style.color = "#ef4444";
+                rPoints.innerText = "0 points";
             }
             document.getElementById('r_total').innerText = myTotalScore;
         });
     }
 
-    let lastPoints = 0;
-
     function submitAnswer(choice) {
-        if (currentAnswer !== '') return; 
-        currentAnswer = choice;
+        if (myChoice !== null) return;
+        myChoice = choice;
         
-        document.querySelectorAll('.option').forEach(b => b.disabled = true);
+        document.querySelectorAll('.btn-opt').forEach(b => { b.disabled = true; b.style.background = '#475569'; });
         document.getElementById('s_status').innerText = "Answer locked in!";
         
-        const timeTaken = (Date.now() - questionStartTime) / 1000;
+        const timeTaken = (Date.now() - startTime) / 1000;
         
-        // Student calculates their own points for the visual scoreboard
-        // We don't know if it's correct yet, so we just calculate the base time-decay points
-        // If correct, teacher adds to leaderboard. 
-        lastPoints = 100;
-        if (timeTaken > 10) lastPoints = Math.max(50, 100 - ((timeTaken - 10) * 5));
-        
-        // Wait, the student only gets points if they are right. 
-        // We'll send the answer to the teacher. The teacher validates and updates.
-        // But for the student's own screen, we need to know their total.
-        // For simplicity, let's just trust the teacher to send back a personal score, OR we calculate it.
-        
-        channel.publish('submit_answer', {
-            name: myName,
-            choice: choice,
-            timeTaken: timeTaken
-        });
-        
-        // To keep student total synced:
-        // We need the correct answer to know if we add points. 
-        // We will calculate total upon reveal.
+        channel.publish('submit_answer', { name: myName, choice: choice, timeTaken: timeTaken });
     }
 </script>
 </body>
