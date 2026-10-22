@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trivia Blitz · Live Quiz</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- qrcode.js for the Teacher Board -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <!-- html5-qrcode for Student scanning -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Ably Realtime SDK -->
+    <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .gamepad-btn:active { transform: scale(0.95); }
+        .frozen { opacity: 0.4; pointer-events: none; filter: grayscale(1); }
+        .lockout-overlay { background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); }
+        .avatar-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; max-height: 40vh; overflow-y: auto; }
+        .avatar-option { font-size: 2rem; line-height: 1; cursor: pointer; padding: 0.25rem; border-radius: 0.5rem; transition: all 0.1s; text-align: center; }
+        .avatar-option.selected { background: #4f46e5; box-shadow: 0 0 0 3px #818cf8; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-slate-900 font-sans antialiased text-slate-100 h-screen overflow-hidden flex flex-col">
+
+<!-- ========================================================= -->
+<!-- TEACHER BOARD CONSOLE -->
+<!-- ========================================================= -->
+<div id="teacherApp" class="hidden h-full flex flex-col bg-slate-800">
+    <!-- Header -->
+    <header class="bg-slate-950 border-b border-slate-700 px-4 py-3 flex flex-wrap items-center justify-between shadow-lg shrink-0">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">📋</span>
+            <h1 class="text-xl font-bold tracking-tight">Teacher Board</h1>
+            <span id="roomBadge" class="bg-indigo-600 text-xs font-mono px-3 py-1 rounded-full">ROOM: ——</span>
+        </div>
+        <div class="flex items-center gap-4 text-sm">
+            <span id="playerCount" class="bg-slate-700 px-3 py-1 rounded-full font-mono">👥 0 / 200</span>
+            <span id="clockDisplay" class="bg-slate-700 px-3 py-1 rounded-full font-mono text-emerald-400 font-bold">⏱️ --</span>
+            <button id="resetBoardBtn" class="bg-rose-700 hover:bg-rose-600 px-3 py-1 rounded-lg transition">Reset</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden">
+        <!-- Left: QR Code -->
+        <div class="lg:col-span-3 bg-slate-900 rounded-2xl p-4 flex flex-col items-center shadow-xl border border-slate-700 h-full">
+            <h2 class="text-sm uppercase tracking-wider text-slate-400 mb-2 font-bold">Scan to join</h2>
+            <div id="qrcodeContainer" class="bg-white p-3 rounded-2xl shadow-inner"></div>
+            <div class="mt-4 w-full">
+                <label class="text-xs text-slate-400 block mb-1">Direct Link</label>
+                <div id="joinLinkDisplay" class="bg-slate-800 rounded-xl px-2 py-2 font-mono text-xs text-indigo-300 break-all border border-slate-600 text-center cursor-pointer" onclick="navigator.clipboard.writeText(this.innerText); alert('Copied!')">
+                    Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Question Controls -->
+        <div class="lg:col-span-6 bg-slate-900 rounded-2xl p-5 shadow-xl border border-slate-700 flex flex-col h-full overflow-y-auto scrollbar-hide">
+            <h2 class="font-semibold text-lg mb-3">📌 Question Deck</h2>
+            <div class="space-y-3">
+                <textarea id="questionText" rows="2" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Enter question text...">What is the capital of France?</textarea>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex bg-slate-800 rounded-lg border border-slate-600 p-2">
+                        <span class="font-bold text-indigo-400 mr-2">A</span>
+                        <input id="choiceA" class="bg-transparent w-full outline-none text-sm" value="Berlin">
+                    </div>
+                    <div class="flex bg-slate-800 rounded-lg border border-slate-600 p-2">
+                        <span class="font-bold text-indigo-400 mr-2">B</span>
+                        <input id="choiceB" class="bg-transparent w-full outline-none text-sm" value="Madrid">
+                    </div>
+                    <div class="flex bg-slate-800 rounded-lg border border-slate-600 p-2">
+                        <span class="font-bold text-indigo-400 mr-2">C</span>
+                        <input id="choiceC" class="bg-transparent w-full outline-none text-sm" value="Paris">
+                    </div>
+                    <div class="flex bg-slate-800 rounded-lg border border-slate-600 p-2">
+                        <span class="font-bold text-indigo-400 mr-2">D</span>
+                        <input id="choiceD" class="bg-transparent w-full outline-none text-sm" value="Rome">
+                    </div>
+                </div>
+
+                <div class="flex gap-2 items-center flex-wrap bg-slate-800 p-3 rounded-xl border border-slate-600 text-sm">
+                    <label class="text-slate-400">Correct:</label>
+                    <select id="correctChoiceSelect" class="bg-slate-700 rounded p-1 outline-none font-bold text-white">
+                        <option value="A">A</option><option value="B">B</option><option value="C" selected>C</option><option value="D">D</option>
+                    </select>
+                    <label class="text-slate-400 ml-2">Duration(s):</label>
+                    <input id="durationInput" type="number" value="20" min="5" max="60" class="w-16 bg-slate-700 rounded p-1 text-center outline-none">
+                    <label class="text-slate-400 ml-2">Base Pts:</label>
+                    <input id="baseMarksInput" type="number" value="100" min="10" max="500" class="w-16 bg-slate-700 rounded p-1 text-center outline-none">
+                    <label class="text-slate-400 ml-2">Penalty:</label>
+                    <input id="penaltyInput" type="number" value="50" min="0" max="200" class="w-16 bg-slate-700 rounded p-1 text-center outline-none">
+                </div>
+            </div>
+
+            <div class="mt-auto pt-4 flex gap-2">
+                <button id="broadcastQuestionBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition shadow-lg shadow-indigo-900/50">▶ Broadcast Question</button>
+                <button id="closeWindowBtn" class="bg-amber-600 hover:bg-amber-500 px-4 rounded-xl font-bold transition disabled:opacity-50" disabled>⏹ Close</button>
+                <button id="revealAnswerBtn" class="bg-emerald-700 hover:bg-emerald-600 px-4 rounded-xl font-bold transition disabled:opacity-50" disabled>✅ Reveal</button>
+            </div>
+
+            <div id="answerRevealPanel" class="mt-3 bg-emerald-900/50 border border-emerald-700 p-3 rounded-xl text-center text-sm hidden">
+                Correct Answer: <span id="correctAnswerLabel" class="font-bold text-emerald-400 text-lg">—</span>
+            </div>
+        </div>
+
+        <!-- Right: Live Leaderboard -->
+        <div class="lg:col-span-3 bg-slate-900 rounded-2xl p-4 shadow-xl border border-slate-700 flex flex-col h-full overflow-hidden">
+            <h2 class="font-semibold text-lg mb-2">📊 Live Leaderboard</h2>
+            <div id="leaderboardList" class="flex-1 overflow-y-auto space-y-1 text-sm pr-1">
+                <div class="text-slate-500 italic text-center mt-4">No players yet</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- STUDENT MOBILE GAMEPAD -->
+<!-- ========================================================= -->
+<div id="studentApp" class="hidden h-full flex flex-col bg-slate-950">
+    <!-- Lockout Overlay (Anti-Cheat) -->
+    <div id="lockoutOverlay" class="fixed inset-0 z-50 lockout-overlay flex flex-col items-center justify-center hidden p-6 text-center">
+        <span class="text-7xl mb-4">🚫</span>
+        <h2 class="text-3xl font-bold text-rose-500 mb-2">Infraction Detected!</h2>
+        <p class="text-slate-300 text-lg mb-6">You navigated away from the quiz. The teacher has been notified and a penalty was applied.</p>
+        <button id="dismissLockoutBtn" class="bg-rose-600 px-8 py-3 rounded-xl text-white font-bold text-lg shadow-lg">Return to Quiz</button>
+    </div>
+
+    <!-- Student Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg shrink-0">
+        <div class="flex items-center gap-3">
+            <span id="studentAvatarDisplay" class="text-3xl">🦊</span>
+            <div>
+                <div id="studentNickname" class="font-bold text-sm">Player</div>
+                <div class="text-xs text-slate-400">Score: <span id="studentScore" class="text-emerald-400 font-bold">0</span></div>
+            </div>
+        </div>
+        <span id="connectionStatus" class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Connecting...</span>
+    </header>
+
+    <!-- Dynamic Content Area -->
+    <div class="flex-1 flex flex-col items-center justify-center p-4 relative w-full max-w-md mx-auto">
+        
+        <!-- LOBBY VIEW -->
+        <div id="lobbyView" class="w-full text-center space-y-5">
+            <h2 class="text-3xl font-bold">Join the Quiz</h2>
+            <p class="text-slate-400 text-sm">Select an avatar and enter your name</p>
+            
+            <div class="avatar-grid" id="avatarGrid"></div>
+            
+            <input id="nicknameInput" maxlength="16" placeholder="Your Nickname" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-4 text-center text-xl font-bold placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none">
+            
+            <button id="joinLobbyBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-xl shadow-xl shadow-indigo-900/50 transition">JOIN GAME</button>
+            
+            <div class="relative flex py-2 items-center">
+                <div class="flex-grow border-t border-slate-700"></div>
+                <span class="flex-shrink mx-4 text-slate-500 text-xs">OR</span>
+                <div class="flex-grow border-t border-slate-700"></div>
+            </div>
+            
+            <button id="scanQrBtn" class="w-full bg-slate-800 border border-slate-600 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-slate-700 transition">
+                <span>📷</span> Scan QR Code
+            </button>
+            <div id="qrScannerContainer" class="hidden rounded-xl overflow-hidden mt-2 border-2 border-indigo-500"></div>
+        </div>
+
+        <!-- GAMEPAD VIEW -->
+        <div id="gamepadView" class="hidden w-full h-full flex flex-col justify-center space-y-6">
+            <div class="bg-slate-900 rounded-3xl p-6 border border-slate-700 shadow-2xl">
+                <div class="text-xs uppercase text-indigo-400 tracking-widest font-bold mb-2 text-center">Question</div>
+                <div id="gamepadQuestionText" class="text-2xl font-bold leading-snug text-center">—</div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button data-choice="A" class="gamepad-btn choice-btn bg-blue-600 hover:bg-blue-500 py-8 rounded-2xl font-black text-3xl shadow-xl transition border-b-4 border-blue-800">A</button>
+                <button data-choice="B" class="gamepad-btn choice-btn bg-purple-600 hover:bg-purple-500 py-8 rounded-2xl font-black text-3xl shadow-xl transition border-b-4 border-purple-800">B</button>
+                <button data-choice="C" class="gamepad-btn choice-btn bg-teal-600 hover:bg-teal-500 py-8 rounded-2xl font-black text-3xl shadow-xl transition border-b-4 border-teal-800">C</button>
+                <button data-choice="D" class="gamepad-btn choice-btn bg-amber-600 hover:bg-amber-500 py-8 rounded-2xl font-black text-3xl shadow-xl transition border-b-4 border-amber-800">D</button>
+            </div>
+            
+            <div id="gamepadStatusText" class="text-center text-sm font-semibold text-slate-400 h-6">Tap an answer to submit</div>
+        </div>
+
+        <!-- FROZEN VIEW -->
+        <div id="frozenView" class="hidden w-full text-center space-y-4">
+            <div class="text-7xl mb-2">🧊</div>
+            <h2 class="text-2xl font-bold">Locked</h2>
+            <p id="frozenMessage" class="text-slate-400">Waiting for host...</p>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================================= -->
+<!-- MAIN SCRIPT LOGIC -->
+<!-- ========================================================= -->
+<script>
+    // =========================================================
+    // 1. CONFIGURATION & STATE
+    // =========================================================
+    const ABLY_API_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
+    let ably = null;
+    let channel = null;
+    let currentRoomId = '';
+
+    // OOA Models
+    class PlayerProfile {
+        constructor(nickname, avatar) {
+            this.nickname = nickname;
+            this.avatar = avatar;
+            this.score = 0;
+            this.infractions = 0;
+        }
+    }
+
+    // App State
+    let isTeacher = false;
+    let myPlayer = null;
+    let teacherPlayers = new Map();
+    
+    // Teacher State
+    let currentQuestion = null;
+    let questionActive = false;
+    let questionStartTime = 0;
+    let roundDuration = 20;
+    let timerInterval = null;
+    let questionIndex = 0;
+
+    // Student State
+    let studentAnswerLocked = false;
+    let currentStudentQuestion = null;
+    let qrScannerInstance = null;
+
+    // =========================================================
+    // 2. INITIALIZATION
+    // =========================================================
+    window.addEventListener('load', () => {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const role = params.get('role');
+        
+        // Room ID logic: If student, it's in URL. If teacher, we generate one.
+        if (role === 'teacher') {
+            isTeacher = true;
+            currentRoomId = params.get('room') || 'QUIZ' + Math.floor(1000 + Math.random() * 9000);
+            initTeacher();
+        } else {
+            currentRoomId = params.get('room') || '';
+            initStudent();
+        }
+    });
+
+    // =========================================================
+    // 3. TEACHER LOGIC
+    // =========================================================
+    function initTeacher() {
+        document.getElementById('teacherApp').classList.remove('hidden');
+        document.getElementById('roomBadge').innerText = `ROOM: ${currentRoomId}`;
+        
+        // Generate QR Code
+        const joinLink = `${window.location.origin}${window.location.pathname}#role=student&room=${currentRoomId}`;
+        document.getElementById('joinLinkDisplay').innerText = joinLink;
+        new QRCode(document.getElementById("qrcodeContainer"), {
+            text: joinLink,
+            width: 200,
+            height: 200,
+            colorDark: "#0f172a",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+        });
+
+        // Init Ably
+        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: 'teacher' });
+        channel = ably.channels.get(`room_${currentRoomId}`);
+
+        ably.connection.on('connected', () => {
+            console.log('Teacher connected to Ably');
+            
+            // Listen for student joins
+            channel.subscribe('player_join', (msg) => {
+                const { nickname, avatar } = msg.data;
+                if (teacherPlayers.size >= 200) {
+                    channel.publish('join_ack', { nickname, success: false, reason: 'Room full' });
+                    return;
+                }
+                if (teacherPlayers.has(nickname)) {
+                    channel.publish('join_ack', { nickname, success: false, reason: 'Name taken' });
+                    return;
+                }
+                
+                teacherPlayers.set(nickname, new PlayerProfile(nickname, avatar));
+                channel.publish('join_ack', { nickname, success: true });
+                updateTeacherUI();
+            });
+
+            // Listen for submissions
+            channel.subscribe('submission', (msg) => {
+                const { nickname, choice, timeElapsed, qIndex } = msg.data;
+                if (!questionActive || qIndex !== questionIndex) return;
+
+                const player = teacherPlayers.get(nickname);
+                if (!player) return;
+
+                let points = 0;
+                let isCorrect = (choice === currentQuestion.correct);
+                
+                if (isCorrect) {
+                    // Time-decay logic: Full marks < 10s. Down to 50% penalty by end.
+                    if (timeElapsed <= 10) {
+                        points = currentQuestion.baseMarks;
+                    } else {
+                        const maxPenaltyWindow = roundDuration - 10;
+                        const ratio = Math.min((timeElapsed - 10) / Math.max(1, maxPenaltyWindow), 1);
+                        points = Math.round(currentQuestion.baseMarks * (1 - 0.5 * ratio));
+                    }
+                } else {
+                    points = -Math.abs(currentQuestion.penalty); // Negative marking
+                }
+
+                player.score += points;
+                channel.publish('score_update', { nickname, newScore: player.score, delta: points });
+                updateTeacherUI();
+            });
+
+            // Listen for anti-cheat flags
+            channel.subscribe('cheat_flag', (msg) => {
+                const { nickname } = msg.data;
+                const player = teacherPlayers.get(nickname);
+                if (player) {
+                    player.infractions++;
+                    player.score -= 25; // Instant penalty for cheating
+                    channel.publish('score_update', { nickname, newScore: player.score, delta: -25 });
+                    updateTeacherUI();
+                }
+            });
+        });
+
+        // Teacher UI Listeners
+        document.getElementById('broadcastQuestionBtn').onclick = () => {
+            const text = document.getElementById('questionText').value;
+            currentQuestion = {
+                text: text,
+                A: document.getElementById('choiceA').value,
+                B: document.getElementById('choiceB').value,
+                C: document.getElementById('choiceC').value,
+                D: document.getElementById('choiceD').value,
+                correct: document.getElementById('correctChoiceSelect').value,
+                baseMarks: parseInt(document.getElementById('baseMarksInput').value),
+                penalty: parseInt(document.getElementById('penaltyInput').value)
+            };
+            roundDuration = parseInt(document.getElementById('durationInput').value);
+            
+            questionIndex++;
+            questionActive = true;
+            questionStartTime = Date.now();
+            
+            document.getElementById('answerRevealPanel').classList.add('hidden');
+            document.getElementById('broadcastQuestionBtn').disabled = true;
+            document.getElementById('closeWindowBtn').disabled = false;
+            document.getElementById('revealAnswerBtn').disabled = false;
+
+            channel.publish('question_start', {
+                index: questionIndex,
+                text: currentQuestion.text,
+                duration: roundDuration,
+                choices: { A: currentQuestion.A, B: currentQuestion.B, C: currentQuestion.C, D: currentQuestion.D }
+            });
+
+            // Start Host Timer
+            let timeLeft = roundDuration;
+            document.getElementById('clockDisplay').innerText = `⏱️ ${timeLeft}s`;
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('clockDisplay').innerText = `⏱️ ${timeLeft}s`;
+                if (timeLeft <= 0) {
+                    document.getElementById('closeWindowBtn').click();
+                }
+            }, 1000);
+        };
+
+        document.getElementById('closeWindowBtn').onclick = () => {
+            questionActive = false;
+            clearInterval(timerInterval);
+            channel.publish('question_close', {});
+            document.getElementById('closeWindowBtn').disabled = true;
+            document.getElementById('clockDisplay').innerText = `⏱️ 0s`;
+        };
+
+        document.getElementById('revealAnswerBtn').onclick = () => {
+            channel.publish('reveal_answer', { correct: currentQuestion.correct });
+            document.getElementById('correctAnswerLabel').innerText = currentQuestion.correct;
+            document.getElementById('answerRevealPanel').classList.remove('hidden');
+            document.getElementById('broadcastQuestionBtn').disabled = false;
+            document.getElementById('revealAnswerBtn').disabled = true;
+        };
+
+        document.getElementById('resetBoardBtn').onclick = () => {
+            if(confirm('Reset all scores and allow new questions?')) {
+                teacherPlayers.clear();
+                questionIndex = 0;
+                questionActive = false;
+                clearInterval(timerInterval);
+                document.getElementById('clockDisplay').innerText = `⏱️ --`;
+                document.getElementById('broadcastQuestionBtn').disabled = false;
+                document.getElementById('closeWindowBtn').disabled = true;
+                document.getElementById('revealAnswerBtn').disabled = true;
+                document.getElementById('answerRevealPanel').classList.add('hidden');
+                updateTeacherUI();
+            }
+        };
+    }
+
+    function updateTeacherUI() {
+        document.getElementById('playerCount').innerText = `👥 ${teacherPlayers.size} / 200`;
+        const sorted = Array.from(teacherPlayers.values()).sort((a, b) => b.score - a.score);
+        
+        if (sorted.length === 0) {
+            document.getElementById('leaderboardList').innerHTML = '<div class="text-slate-500 italic text-center mt-4">No players yet</div>';
+            return;
+        }
+
+        document.getElementById('leaderboardList').innerHTML = sorted.map((p, i) => `
+            <div class="flex justify-between items-center bg-slate-800/80 px-3 py-2 rounded-lg border border-slate-700">
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-400 text-xs w-4">#${i+1}</span>
+                    <span class="text-xl">${p.avatar}</span>
+                    <span class="font-medium text-sm truncate max-w-[100px]">${p.nickname}</span>
+                </div>
+                <div class="flex flex-col items-end">
+                    <span class="font-mono font-bold text-emerald-400">${p.score}</span>
+                    ${p.infractions > 0 ? `<span class="text-[10px] text-rose-500 font-bold">⚠️ ${p.infractions} flags</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // =========================================================
+    // 4. STUDENT LOGIC
+    // =========================================================
+    function initStudent() {
+        document.getElementById('studentApp').classList.remove('hidden');
+        
+        // Populate Avatars (100 emojis)
+        const emojis = ['🦊','🐻','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🐤','🐴','🦄','🐋','🐬','🐟','🐠','🦋','🐝','🐞','🦉','🦅','🦆','🦇','🐺','🐗','🐴','🦓','🦒','🐘','🦏','🐊','🐢','🦎','🐍','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐳','🦈','🐆','🐅','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🌱','🌿','☘️','🍀','🎍','🎋','🍃','🍂','🍁','🍄','🌾','💐','🌷','🌹','🌺','🌸'];
+        const grid = document.getElementById('avatarGrid');
+        grid.innerHTML = emojis.map((e, i) => `<div class="avatar-option ${i===0?'selected':''}" data-val="${e}">${e}</div>`).join('');
+        
+        grid.querySelectorAll('.avatar-option').forEach(el => {
+            el.onclick = () => {
+                grid.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                el.classList.add('selected');
+            };
+        });
+
+        // Join Button
+        document.getElementById('joinLobbyBtn').onclick = () => {
+            const nickname = document.getElementById('nicknameInput').value.trim();
+            const avatar = grid.querySelector('.selected').dataset.val;
+            if (!nickname) return alert('Please enter a nickname');
+            if (!currentRoomId) return alert('Error: No Room ID found. Please scan the QR code.');
+
+            myPlayer = new PlayerProfile(nickname, avatar);
+            document.getElementById('studentAvatarDisplay').innerText = avatar;
+            document.getElementById('studentNickname').innerText = nickname;
+            document.getElementById('joinLobbyBtn').innerText = 'Connecting...';
+            
+            connectStudentToAbly(nickname, avatar);
+        };
+
+        // QR Scanner Logic
+        document.getElementById('scanQrBtn').onclick = async () => {
+            const container = document.getElementById('qrScannerContainer');
+            container.classList.remove('hidden');
+            if (!qrScannerInstance) {
+                qrScannerInstance = new Html5Qrcode("qrScannerContainer");
+            }
+            try {
+                await qrScannerInstance.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        const match = decodedText.match(/room=([A-Z0-9]+)/);
+                        if (match && match[1]) {
+                            currentRoomId = match[1];
+                            qrScannerInstance.stop();
+                            container.classList.add('hidden');
+                            document.getElementById('nicknameInput').focus();
+                            alert(`Connected to Room ${currentRoomId}! Enter your nickname.`);
+                        }
+                    }
+                );
+            } catch (err) {
+                container.classList.add('hidden');
+                alert("Camera access denied or unavailable.");
+            }
+        };
+
+        // Anti-Cheat Detection
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && myPlayer && !studentAnswerLocked) {
+                if (channel) {
+                    channel.publish('cheat_flag', { nickname: myPlayer.nickname });
+                }
+                document.getElementById('lockoutOverlay').classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('dismissLockoutBtn').onclick = () => {
+            document.getElementById('lockoutOverlay').classList.add('hidden');
+        };
+    }
+
+    function connectStudentToAbly(nickname, avatar) {
+        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: nickname });
+        channel = ably.channels.get(`room_${currentRoomId}`);
+
+        ably.connection.on('connected', () => {
+            document.getElementById('connectionStatus').innerText = '● Connected';
+            document.getElementById('connectionStatus').classList.replace('bg-slate-800', 'bg-emerald-900');
+            document.getElementById('connectionStatus').classList.replace('text-slate-400', 'text-emerald-300');
+            
+            channel.publish('player_join', { nickname, avatar });
+        });
+
+        channel.subscribe('join_ack', (msg) => {
+            if (msg.data.nickname === nickname) {
+                if (msg.data.success) {
+                    document.getElementById('lobbyView').classList.add('hidden');
+                    document.getElementById('frozenView').classList.remove('hidden');
+                    document.getElementById('frozenMessage').innerText = "Waiting for teacher to start...";
+                } else {
+                    alert('Failed to join: ' + msg.data.reason);
+                    document.getElementById('joinLobbyBtn').innerText = 'JOIN GAME';
+                }
+            }
+        });
+
+        channel.subscribe('question_start', (msg) => {
+            currentStudentQuestion = msg.data;
+            document.getElementById('frozenView').classList.add('hidden');
+            document.getElementById('lobbyView').classList.add('hidden');
+            document.getElementById('gamepadView').classList.remove('hidden');
+            document.getElementById('gamepadQuestionText').innerText = msg.data.text;
+            
+            // Reset lock state
+            studentAnswerLocked = false;
+            document.getElementById('gamepadStatusText').innerText = "Tap an answer to submit";
+            document.querySelectorAll('.choice-btn').forEach(btn => {
+                btn.classList.remove('frozen');
+                btn.disabled = false;
+            });
+
+            // Store start time locally for accurate elapsed calculation
+            currentStudentQuestion.localStartTime = Date.now();
+        });
+
+        channel.subscribe('question_close', () => {
+            document.getElementById('gamepadView').classList.add('hidden');
+            document.getElementById('frozenView').classList.remove('hidden');
+            document.getElementById('frozenMessage').innerText = "Question closed. Waiting for results...";
+            studentAnswerLocked = true; // Ensure they can't click
+        });
+
+        channel.subscribe('reveal_answer', (msg) => {
+            document.getElementById('frozenMessage').innerText = `Correct Answer: ${msg.data.correct}`;
+        });
+
+        channel.subscribe('score_update', (msg) => {
+            if (msg.data.nickname === myPlayer.nickname) {
+                myPlayer.score = msg.data.newScore;
+                document.getElementById('studentScore').innerText = myPlayer.score;
+            }
+        });
+
+        // Handle Answer Clicks
+        document.querySelectorAll('.choice-btn').forEach(btn => {
+            btn.onclick = () => {
+                if (studentAnswerLocked || !currentStudentQuestion) return;
+                
+                const choice = btn.dataset.choice;
+                const timeElapsed = (Date.now() - currentStudentQuestion.localStartTime) / 1000;
+                
+                // Lock UI
+                studentAnswerLocked = true;
+                document.querySelectorAll('.choice-btn').forEach(b => {
+                    b.classList.add('frozen');
+                    b.disabled = true;
+                });
+                document.getElementById('gamepadStatusText').innerText = "Answer locked! Waiting...";
+
+                channel.publish('submission', {
+                    nickname: myPlayer.nickname,
+                    choice: choice,
+                    timeElapsed: timeElapsed,
+                    qIndex: currentStudentQuestion.index
+                });
+            };
+        });
+    }
+</script>
+</body>
+</html>
