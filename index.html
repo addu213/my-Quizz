@@ -23,7 +23,6 @@
 </head>
 <body class="bg-slate-900 font-sans antialiased text-slate-100 h-screen overflow-hidden flex flex-col">
 
-<!-- TEACHER APP -->
 <div id="teacherApp" class="hidden h-full flex flex-col bg-slate-800">
     <header class="bg-slate-950 border-b border-slate-700 px-4 py-3 flex flex-wrap items-center justify-between shadow-lg shrink-0">
         <div class="flex items-center gap-3">
@@ -37,8 +36,7 @@
     </header>
 
     <div class="flex-1 relative overflow-hidden">
-        
-        <!-- VIEW 1: SETUP -->
+        <!-- SETUP VIEW -->
         <div id="setupView" class="absolute inset-0 p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-y-auto">
             <div class="lg:col-span-4 bg-slate-900 rounded-2xl p-4 flex flex-col shadow-xl border border-slate-700">
                 <h2 class="text-sm uppercase tracking-wider text-slate-400 mb-2 font-bold">Scan to join</h2>
@@ -72,7 +70,7 @@
             </div>
         </div>
 
-        <!-- VIEW 2: PROJECTOR -->
+        <!-- PROJECTOR VIEW -->
         <div id="projectorView" class="absolute inset-0 bg-slate-900 z-20 flex-col p-8 hidden">
             <div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
                 <h2 class="text-3xl font-bold text-slate-400">Question <span id="projQNum">1</span></h2>
@@ -92,7 +90,7 @@
             </div>
         </div>
 
-        <!-- VIEW 3: TOP 10 LEADERBOARD -->
+        <!-- TOP 10 VIEW -->
         <div id="resultsView" class="absolute inset-0 bg-slate-900 z-30 flex-col p-8 hidden items-center justify-center">
             <h2 class="text-5xl font-black text-amber-400 mb-8 uppercase tracking-widest text-center">Top 10 Leaderboard</h2>
             <div id="top10List" class="w-full max-w-3xl space-y-3 mb-10">
@@ -106,7 +104,6 @@
     </div>
 </div>
 
-<!-- STUDENT APP -->
 <div id="studentApp" class="hidden h-full flex flex-col bg-slate-950">
     <div id="lockoutOverlay" class="fixed inset-0 z-50 lockout-overlay flex flex-col items-center justify-center hidden p-6 text-center">
         <span class="text-7xl mb-4">🚫</span><h2 class="text-3xl font-bold text-rose-500 mb-2">Infraction!</h2><p class="text-slate-300 mb-6">You switched tabs. Penalty applied.</p>
