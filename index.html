@@ -450,4 +450,11 @@
                 const timeElapsed = (Date.now() - currentStudentQuestion.localStartTime) / 1000;
                 studentAnswerLocked = true;
                 document.querySelectorAll('.choice-btn').forEach(b => { b.classList.add('frozen'); b.disabled = true; });
-                document.getElementById('gamepadStatus
+                document.getElementById('gamepadStatusText').innerText = "Answer locked!";
+                channel.publish('submission', { nickname: myPlayer.nickname, choice, timeElapsed, qIndex: currentStudentQuestion.index });
+            };
+        });
+    }
+</script>
+</body>
+</html>
