@@ -1,634 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Trivia Blitz</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
+<style>
+body{-webkit-tap-highlight-color:transparent;}
+.gamepad-btn:active{transform:scale(0.95);}
+.frozen{opacity:0.4;pointer-events:none;filter:grayscale(1);}
+.lockout-overlay{background:rgba(0,0,0,0.9);backdrop-filter:blur(8px);}
+.avatar-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;max-height:40vh;overflow-y:auto;}
+.avatar-option{font-size:2rem;cursor:pointer;padding:0.25rem;border-radius:0.5rem;text-align:center;}
+.avatar-option.selected{background:#4f46e5;box-shadow:0 0 0 3px #818cf8;}
+.scrollbar-hide::-webkit-scrollbar{display:none;}
+.json-box{font-family:monospace;font-size:12px;width:100%;height:90px;}
+.correct-glow{background-color:#059669!important;border-color:#34d399!important;transform:scale(1.02);box-shadow:0 0 20px rgba(52,211,153,0.5);}
+</style>
+</head>
+<body class="bg-slate-900 font-sans antialiased text-slate-100 h-screen overflow-hidden flex flex-col">
+<div id="teacherApp" class="hidden h-full flex flex-col bg-slate-800">
+<header class="bg-slate-950 border-b border-slate-700 px-4 py-3 flex flex-wrap items-center justify-between shadow-lg shrink-0">
+<div class="flex items-center gap-3"><span class="text-2xl">📋</span><h1 class="text-xl font-bold tracking-tight">Teacher Board</h1><span id="roomBadge" class="bg-indigo-600 text-xs font-mono px-3 py-1 rounded-full">ROOM: ——</span></div>
+<div class="flex items-center gap-4 text-sm"><span id="playerCount" class="bg-slate-700 px-3 py-1 rounded-full font-mono">👥 0 / 200</span><button id="resetBoardBtn" class="bg-rose-700 hover:bg-rose-600 px-3 py-1 rounded-lg transition">Reset Game</button></div>
+</header>
+<div class="flex-1 relative overflow-hidden">
+<div id="setupView" class="absolute inset-0 p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 overflow-y-auto">
+<div class="lg:col-span-4 bg-slate-900 rounded-2xl p-4 flex flex-col shadow-xl border border-slate-700">
+<h2 class="text-sm uppercase tracking-wider text-slate-400 mb-2 font-bold">Scan to join</h2>
+<div id="qrcodeContainer" class="bg-white p-3 rounded-2xl self-center shadow-inner mb-4"></div>
+<label class="text-xs text-indigo-400 font-bold block mb-1">Saved Deck Name</label>
+<input id="deckNameInput" type="text" class="bg-slate-800 border border-slate-600 rounded-lg p-2 text-sm w-full outline-none mb-2 text-indigo-200" placeholder="e.g. Class 1 Quiz">
+<label class="text-xs text-indigo-400 font-bold block mb-1">Load Deck (JSON)</label>
+<textarea id="jsonInput" class="bg-slate-800 border border-slate-600 rounded-lg p-2 json-box text-slate-300 outline-none mb-2" placeholder='[{"q":"Question?","a":"A","b":"B","c":"C","d":"D","correct":"A"}]'></textarea>
+<button id="saveDeckBtn" class="w-full bg-emerald-700 hover:bg-emerald-600 py-2 rounded-lg text-xs font-bold transition mb-2">Save & Load Deck</button>
+<div id="deckStatus" class="text-xs text-center text-slate-400 mb-4">No deck loaded.</div>
+<button id="loadNextBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-bold transition shadow-lg mt-auto">Load Question ▶</button>
+</div>
+<div class="lg:col-span-8 bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-700 flex flex-col">
+<h2 class="font-semibold text-xl mb-4">📌 Question Editor (Hidden from Projector)</h2>
+<textarea id="questionText" rows="3" class="w-full bg-slate-800 border border-slate-600 rounded-xl p-3 text-lg outline-none mb-4" placeholder="Enter question...">What is the capital of France?</textarea>
+<div class="grid grid-cols-2 gap-3 mb-4">
+<div class="flex bg-slate-800 rounded-lg border border-slate-600 p-3"><span class="font-bold text-indigo-400 mr-3 text-lg">A</span><input id="choiceA" class="bg-transparent w-full outline-none text-lg" value="Berlin"></div>
+<div class="flex bg-slate-800 rounded-lg border border-slate-600 p-3"><span class="font-bold text-indigo-400 mr-3 text-lg">B</span><input id="choiceB" class="bg-transparent w-full outline-none text-lg" value="Madrid"></div>
+<div class="flex bg-slate-800 rounded-lg border border-slate-600 p-3"><span class="font-bold text-indigo-400 mr-3 text-lg">C</span><input id="choiceC" class="bg-transparent w-full outline-none text-lg" value="Paris"></div>
+<div class="flex bg-slate-800 rounded-lg border border-slate-600 p-3"><span class="font-bold text-indigo-400 mr-3 text-lg">D</span><input id="choiceD" class="bg-transparent w-full outline-none text-lg" value="Rome"></div>
+</div>
+<div class="flex gap-4 items-center bg-slate-800 p-4 rounded-xl border border-slate-600 text-lg mb-6">
+<label class="text-slate-400">Correct:</label>
+<select id="correctChoiceSelect" class="bg-slate-700 rounded p-2 outline-none font-bold text-white"><option value="A">A</option><option value="B">B</option><option value="C" selected>C</option><option value="D">D</option></select>
+<label class="text-slate-400 ml-4">Time(s):</label><input id="durationInput" type="number" value="20" class="w-20 bg-slate-700 rounded p-2 text-center">
+<label class="text-slate-400 ml-4">Base Pts:</label><input id="baseMarksInput" type="number" value="100" class="w-20 bg-slate-700 rounded p-2 text-center">
+<label class="text-slate-400 ml-4">Penalty:</label><input id="penaltyInput" type="number" value="50" class="w-20 bg-slate-700 rounded p-2 text-center">
+</div>
+<button id="broadcastBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 py-5 rounded-xl font-bold text-xl transition shadow-lg shadow-indigo-900/50 mt-auto">▶ PROJECT TO CLASS</button>
+</div>
+</div>
+<div id="projectorView" class="absolute inset-0 bg-slate-900 z-20 flex-col p-8 hidden">
+<div class="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+<h2 class="text-3xl font-bold text-slate-400">Question <span id="projQNum">1</span></h2>
+<div class="flex items-center gap-4"><span id="projClock" class="text-5xl font-mono text-emerald-400 font-bold bg-slate-800 px-6 py-2 rounded-2xl shadow-inner">20</span><button id="skipTimerBtn" class="bg-rose-700 hover:bg-rose-600 px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition">⏭ Skip / End Timer</button></div>
+</div>
+<div class="flex-1 flex flex-col justify-center">
+<div id="projQText" class="text-4xl font-bold leading-tight mb-12 text-center text-white">Question text...</div>
+<div class="grid grid-cols-2 gap-6 w-full max-w-5xl mx-auto" id="projOptionsGrid">
+<div id="projBoxA" class="bg-slate-800 border-4 border-slate-600 rounded-3xl p-6 flex items-center transition-all duration-500"><span class="text-4xl font-black text-blue-400 mr-6">A</span><span id="projOptA" class="text-3xl text-white">Option A</span></div>
+<div id="projBoxB" class="bg-slate-800 border-4 border-slate-600 rounded-3xl p-6 flex items-center transition-all duration-500"><span class="text-4xl font-black text-purple-400 mr-6">B</span><span id="projOptB" class="text-3xl text-white">Option B</span></div>
+<div id="projBoxC" class="bg-slate-800 border-4 border-slate-600 rounded-3xl p-6 flex items-center transition-all duration-500"><span class="text-4xl font-black text-teal-400 mr-6">C</span><span id="projOptC" class="text-3xl text-white">Option C</span></div>
+<div id="projBoxD" class="bg-slate-800 border-4 border-slate-600 rounded-3xl p-6 flex items-center transition-all duration-500"><span class="text-4xl font-black text-amber-400 mr-6">D</span><span id="projOptD" class="text-3xl text-white">Option D</span></div>
+</div>
+</div>
+</div>
+<div id="resultsView" class="absolute inset-0 bg-slate-900 z-30 flex-col p-8 hidden items-center justify-center">
+<h2 class="text-5xl font-black text-amber-400 mb-8 uppercase tracking-widest text-center">Top 10 Leaderboard</h2>
+<div id="top10List" class="w-full max-w-3xl space-y-3 mb-10"></div>
+<div class="flex gap-4"><button id="resultsNextBtn" class="bg-indigo-600 hover:bg-indigo-500 text-2xl font-bold px-12 py-4 rounded-2xl shadow-xl transition">Next Question ▶</button><button id="resultsSetupBtn" class="bg-slate-700 hover:bg-slate-600 text-xl font-bold px-8 py-4 rounded-2xl shadow-xl transition">Back to Setup</button></div>
+</div>
+</div>
+</div>
+<div id="studentApp" class="hidden h-full flex flex-col bg-slate-950">
+<div id="lockoutOverlay" class="fixed inset-0 z-50 lockout-overlay flex flex-col items-center justify-center hidden p-6 text-center"><span class="text-7xl mb-4">🚫</span><h2 class="text-3xl font-bold text-rose-500 mb-2">Infraction!</h2><p class="text-slate-300 mb-6">You switched tabs. Penalty applied.</p><button id="dismissLockoutBtn" class="bg-rose-600 px-8 py-3 rounded-xl font-bold">Return</button></div>
+<header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shadow-lg shrink-0"><div class="flex items-center gap-3"><span id="studentAvatarDisplay" class="text-3xl">🦊</span><div><div id="studentNickname" class="font-bold text-sm">Player</div><div class="text-xs text-slate-400">Score: <span id="studentScore" class="text-emerald-400 font-bold">0</span></div></div></div><span id="connectionStatus" class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full">Connecting...</span></header>
+<div class="flex-1 flex flex-col items-center justify-center p-4 relative w-full max-w-md mx-auto">
+<div id="lobbyView" class="w-full text-center space-y-5">
+<h2 class="text-3xl font-bold">Join Quiz</h2><div class="avatar-grid" id="avatarGrid"></div>
+<input id="nicknameInput" maxlength="16" placeholder="Nickname" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-4 py-4 text-center text-xl font-bold outline-none">
+<button id="joinLobbyBtn" class="w-full bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl font-bold text-xl shadow-xl">JOIN GAME</button>
+<button id="scanQrBtn" class="w-full bg-slate-800 py-3 rounded-xl text-sm font-semibold border border-slate-600">📷 Scan QR Code</button>
+<div id="qrScannerContainer" class="hidden rounded-xl overflow-hidden mt-2"></div>
+</div>
+<div id="gamepadView" class="hidden w-full h-full flex flex-col justify-center space-y-6">
+<div class="bg-slate-900 rounded-3xl p-6 border border-slate-700 shadow-2xl"><div id="gamepadQuestionText" class="text-2xl font-bold text-center">—</div></div>
+<div class="grid grid-cols-2 gap-4"><button data-choice="A" class="choice-btn bg-blue-600 py-8 rounded-2xl font-black text-3xl">A</button><button data-choice="B" class="choice-btn bg-purple-600 py-8 rounded-2xl font-black text-3xl">B</button><button data-choice="C" class="choice-btn bg-teal-600 py-8 rounded-2xl font-black text-3xl">C</button><button data-choice="D" class="choice-btn bg-amber-600 py-8 rounded-2xl font-black text-3xl">D</button></div>
+<div id="gamepadStatusText" class="text-center text-sm font-semibold text-slate-400">Tap to answer</div>
+</div>
+<div id="frozenView" class="hidden w-full text-center space-y-4"><div class="text-7xl">🧊</div><h2 class="text-2xl font-bold">Locked</h2><p id="frozenMessage" class="text-slate-400">Waiting...</p></div>
+</div>
+</div>
 <script>
-    const ABLY_API_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
-    let ably = null, channel = null, currentRoomId = '';
-    let myPlayer = null, teacherPlayers = new Map();
-    let currentQuestion = null, questionActive = false, roundDuration = 20, timerInterval = null, questionIndex = 0;
-    let loadedDeck = [], deckIndex = -1, studentAnswerLocked = false, currentStudentQuestion = null, qrScannerInstance = null;
-
-    class PlayerProfile { constructor(n, a) { this.nickname = n; this.avatar = a; this.score = 0; this.infractions = 0; } }
-
-    window.addEventListener('load', () => {
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        if (params.get('role') === 'teacher') {
-            currentRoomId = params.get('room') || 'QUIZ' + Math.floor(1000 + Math.random() * 9000);
-            initTeacher();
-        } else {
-            currentRoomId = params.get('room') || '';
-            initStudent();
-        }
-    });
-
-    function initTeacher() {
-        document.getElementById('teacherApp').classList.remove('hidden');
-        document.getElementById('roomBadge').innerText = `ROOM: ${currentRoomId}`;
-        const joinLink = `${window.location.origin}${window.location.pathname}#role=student&room=${currentRoomId}`;
-        new QRCode(document.getElementById("qrcodeContainer"), { text: joinLink, width: 180, height: 180 });
-
-        const savedDeckJSON = localStorage.getItem('trivia_deck_json');
-        if (savedDeckJSON) {
-            document.getElementById('jsonInput').value = savedDeckJSON;
-            if (localStorage.getItem('trivia_deck_name')) document.getElementById('deckNameInput').value = localStorage.getItem('trivia_deck_name');
-            try {
-                loadedDeck = JSON.parse(savedDeckJSON);
-                document.getElementById('deckStatus').innerText = `Auto-loaded: ${loadedDeck.length} qs.`;
-                document.getElementById('deckStatus').className = "text-xs text-center mt-2 text-emerald-400 font-bold";
-            } catch(e) {}
-        }
-
-        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: 'teacher' });
-        channel = ably.channels.get(`room_${currentRoomId}`);
-
-        ably.connection.on('connected', () => {
-            channel.subscribe('player_join', (msg) => {
-                const { nickname, avatar } = msg.data;
-                if (teacherPlayers.size >= 200) return channel.publish('join_ack', { nickname, success: false, reason: 'Room full' });
-                if (teacherPlayers.has(nickname)) return channel.publish('join_ack', { nickname, success: false, reason: 'Name taken' });
-                teacherPlayers.set(nickname, new PlayerProfile(nickname, avatar));
-                channel.publish('join_ack', { nickname, success: true });
-                updateTeacherUI();
-            });
-
-            channel.subscribe('submission', (msg) => {
-                const { nickname, choice, timeElapsed, qIndex } = msg.data;
-                if (!questionActive || qIndex !== questionIndex) return;
-                const player = teacherPlayers.get(nickname);
-                if (!player) return;
-                let points = 0;
-                if (choice === currentQuestion.correct) {
-                    points = (timeElapsed <= 10) ? currentQuestion.baseMarks : Math.round(currentQuestion.baseMarks * (1 - 0.5 * Math.min((timeElapsed - 10) / Math.max(1, roundDuration - 10), 1)));
-                } else {
-                    points = -Math.abs(currentQuestion.penalty);
-                }
-                player.score += points;
-                channel.publish('score_update', { nickname, newScore: player.score });
-                updateTeacherUI();
-            });
-
-            channel.subscribe('cheat_flag', (msg) => {
-                const player = teacherPlayers.get(msg.data.nickname);
-                if (player) { player.infractions++; player.score -= 25; channel.publish('score_update', { nickname: player.nickname, newScore: player.score }); updateTeacherUI(); }
-            });
-        });
-
-        document.getElementById('saveDeckBtn').onclick = () => {
-            try {
-                const raw = document.getElementById('jsonInput').value;
-                loadedDeck = JSON.parse(raw);
-                if (!Array.isArray(loadedDeck) || loadedDeck.length === 0) throw new Error();
-                deckIndex = -1;
-                localStorage.setItem('trivia_deck_json', raw);
-                localStorage.setItem('trivia_deck_name', document.getElementById('deckNameInput').value || 'Unnamed');
-                document.getElementById('deckStatus').innerText = `Saved: ${loadedDeck.length} qs.`;
-                document.getElementById('deckStatus').className = "text-xs text-center mt-2 text-emerald-400 font-bold";
-                alert(`Deck saved!`);
-            } catch (e) { alert("Invalid JSON format."); }
-        };
-
-        document.getElementById('resultsSetupBtn').onclick = () => {
-            document.getElementById('resultsView').classList.add('hidden');
-            document.getElementById('resultsView').classList.remove('flex');
-            document.getElementById('setupView').classList.remove('hidden');
-            document.getElementById('setupView').classList.add('grid');
-        };
-
-        document.getElementById('resultsNextBtn').onclick = () => {
-            document.getElementById('resultsSetupBtn').click();
-            document.getElementById('loadNextBtn').click();
-            document.getElementById('broadcastBtn').click();
-        };
-
-        document.getElementById('loadNextBtn').onclick = () => {
-            deckIndex++;
-            if (deckIndex >= loadedDeck.length) return alert("End of deck!");
-            const q = loadedDeck[deckIndex];
-            document.getElementById('questionText').value = q.q || "";
-            document.getElementById('choiceA').value = q.a || "";
-            document.getElementById('choiceB').value = q.b || "";
-            document.getElementById('choiceC').value = q.c || "";
-            document.getElementById('choiceD').value = q.d || "";
-            document.getElementById('correctChoiceSelect').value = q.correct || "A";
-            document.getElementById('durationInput').value = q.time || 20;
-            document.getElementById('baseMarksInput').value = q.base || 100;
-            document.getElementById('penaltyInput').value = q.pen || 50;
-            document.getElementById('loadNextBtn').innerText = `Next Q (${deckIndex + 1}/${loadedDeck.length}) ▶`;
-        };
-
-        document.getElementById('skipTimerBtn').onclick = () => {
-            if (timerInterval) clearInterval(timerInterval);
-            endRoundAndShowLeaderboard();
-        };
-
-        document.getElementById('broadcastBtn').onclick = () => {
-            currentQuestion = {
-                text: document.getElementById('questionText').value,
-                A: document.getElementById('choiceA').value,
-                B: document.getElementById('choiceB').value,
-                C: document.getElementById('choiceC').value,
-                D: document.getElementById('choiceD').value,
-                correct: document.getElementById('correctChoiceSelect').value,
-                baseMarks: parseInt(document.getElementById('baseMarksInput').value),
-                penalty: parseInt(document.getElementById('penaltyInput').value)
-            };
-            roundDuration = parseInt(document.getElementById('durationInput').value);
-            questionIndex++; questionActive = true;
-
-            document.getElementById('projQNum').innerText = questionIndex;
-            document.getElementById('projQText').innerText = currentQuestion.text;
-            document.getElementById('projOptA').innerText = currentQuestion.A;
-            document.getElementById('projOptB').innerText = currentQuestion.B;
-            document.getElementById('projOptC').innerText = currentQuestion.C;
-            document.getElementById('projOptD').innerText = currentQuestion.D;
-            
-            ['A','B','C','D'].forEach(opt => document.getElementById(`projBox${opt}`).classList.remove('correct-glow'));
-
-            document.getElementById('setupView').classList.add('hidden');
-            document.getElementById('projectorView').classList.remove('hidden');
-            document.getElementById('projectorView').classList.add('flex');
-            
-            channel.publish('question_start', { index: questionIndex, text: currentQuestion.text, duration: roundDuration, choices: { A: currentQuestion.A, B: currentQuestion.B, C: currentQuestion.C, D: currentQuestion.D } });
-
-            let timeLeft = roundDuration;
-            document.getElementById('projClock').innerText = timeLeft;
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft--; 
-                document.getElementById('projClock').innerText = timeLeft;
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    endRoundAndShowLeaderboard();
-                }
-            }, 1000);
-        };
-
-        function endRoundAndShowLeaderboard() {
-            questionActive = false;
-            channel.publish('question_close', {});
-            
-            const colors = { A: 'projBoxA', B: 'projBoxB', C: 'projBoxC', D: 'projBoxD' };
-            const target = document.getElementById(colors[currentQuestion.correct]);
-            if (target) target.classList.add('correct-glow');
-            
-            setTimeout(() => {
-                document.getElementById('projectorView').classList.add('hidden');
-                document.getElementById('projectorView').classList.remove('flex');
-                document.getElementById('resultsView').classList.remove('hidden');
-                document.getElementById('resultsView').classList.add('flex');
-                buildTop10();
-            }, 2500);
-        }
-    }
-
-    function buildTop10() {
-        const sorted = Array.from(teacherPlayers.values()).sort((a, b) => b.score - a.score).slice(0, 10);
-        const list = document.getElementById('top10List');
-        if (sorted.length === 0) return list.innerHTML = '<div class="text-center text-slate-500 text-2xl">No players yet</div>';
-        
-        list.innerHTML = sorted.map((p, i) => {
-            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-            return `
-            <div class="flex justify-between items-center bg-slate-800 border-l-8 ${i===0?'border-amber-400':i===1?'border-slate-300':i===2?'border-amber-700':'border-slate-700'} px-6 py-4 rounded-xl shadow-lg">
-                <div class="flex items-center gap-4">
-                    <span class="text-3xl w-12 text-center">${medal}</span>
-                    <span class="text-4xl">${p.avatar}</span>
-                    <span class="text-2xl font-bold text-slate-200">${p.nickname}</span>
-                </div>
-                <span class="text-3xl font-mono font-black text-emerald-400">${p.score}</span>
-            </div>`;
-        }).join('');
-    }
-
-    function updateTeacherUI() {
-        document.getElementById('playerCount').innerText = `👥 ${teacherPlayers.size} / 200`;
-    }
-
-    function initStudent() {
-        document.getElementById('studentApp').classList.remove('hidden');
-        const emojis = ['🦊','🐻','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🐤','🐴','🦄','🐋','🐬','🐟','🐠','🦋','🐝','🐞','🦉','🦅','🦆','🦇','🐺','🐗','🐴','🦓','🦒','🐘','🦏','🐊','🐢','🦎','🐍','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐳','🦈','🐆','🐅','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🌱','🌿','☘️','🍀','🎍','🎋','🍃','🍂','🍁','🍄','🌾','💐','🌷','🌹','🌺','🌸'];
-        const grid = document.getElementById('avatarGrid');
-        grid.innerHTML = emojis.map((e, i) => `<div class="avatar-option ${i===0?'selected':''}" data-val="${e}">${e}</div>`).join('');
-        grid.querySelectorAll('.avatar-option').forEach(el => {
-            el.onclick = () => { grid.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); };
-        });
-
-        document.getElementById('joinLobbyBtn').onclick = () => {
-            const nickname = document.getElementById('nicknameInput').value.trim();
-            const avatar = grid.querySelector('.selected').dataset.val;
-            if (!nickname) return alert('Enter a nickname');
-            if (!currentRoomId) return alert('No Room ID found. Scan QR.');
-            myPlayer = new PlayerProfile(nickname, avatar);
-            document.getElementById('studentAvatarDisplay').innerText = avatar;
-            document.getElementById('studentNickname').innerText = nickname;
-            document.getElementById('joinLobbyBtn').innerText = 'Connecting...';
-            connectStudentToAbly(nickname, avatar);
-        };
-
-        document.getElementById('scanQrBtn').onclick = async () => {
-            const container = document.getElementById('qrScannerContainer');
-            container.classList.remove('hidden');
-            if (!qrScannerInstance) qrScannerInstance = new Html5Qrcode("qrScannerContainer");
-            try {
-                await qrScannerInstance.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (decodedText) => {
-                    const match = decodedText.match(/room=([A-Z0-9]+)/);
-                    if (match && match[1]) {
-                        currentRoomId = match[1]; qrScannerInstance.stop(); container.classList.add('hidden');
-                        document.getElementById('nicknameInput').focus();
-                        alert(`Connected to Room ${currentRoomId}!`);
-                    }
-                });
-            } catch (err) { container.classList.add('hidden'); alert("Camera denied."); }
-        };
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden' && myPlayer && !studentAnswerLocked) {
-                if (channel) channel.publish('cheat_flag', { nickname: myPlayer.nickname });
-                document.getElementById('lockoutOverlay').classList.remove('hidden');
-            }
-        });
-        document.getElementById('dismissLockoutBtn').onclick = () => document.getElementById('lockoutOverlay').classList.add('hidden');
-    }
-
-    function connectStudentToAbly(nickname, avatar) {
-        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: nickname });
-        channel = ably.channels.get(`room_${currentRoomId}`);
-
-        ably.connection.on('connected', () => {
-            document.getElementById('connectionStatus').innerText = '● Connected';
-            document.getElementById('connectionStatus').className = 'text-xs bg-emerald-900 text-emerald-300 px-3 py-1 rounded-full border border-emerald-700';
-            channel.publish('player_join', { nickname, avatar });
-        });
-
-        channel.subscribe('join_ack', (msg) => {
-            if (msg.data.nickname === nickname) {
-                if (msg.data.success) {
-                    document.getElementById('lobbyView').classList.add('hidden');
-                    document.getElementById('frozenView').classList.remove('hidden');
-                    document.getElementById('frozenMessage').innerText = "Waiting for teacher...";
-                } else {
-                    alert('Failed: ' + msg.data.reason);
-                    document.getElementById('joinLobbyBtn').innerText = 'JOIN GAME';
-                }
-            }
-        });
-
-        channel.subscribe('question_start', (msg) => {
-            currentStudentQuestion = msg.data;
-            document.getElementById('frozenView').classList.add('hidden');
-            document.getElementById('lobbyView').classList.add('hidden');
-            document.getElementById('gamepadView').classList.remove('hidden');
-            document.getElementById('gamepadQuestionText').innerText = msg.data.text;
-            studentAnswerLocked = false;
-            document.getElementById('gamepadStatusText').innerText = "Tap an answer to submit";
-            document.querySelectorAll('.choice-btn').forEach(btn => { btn.classList.remove('frozen'); btn.disabled = false; });
-            currentStudentQuestion.localStartTime = Date.now();
-        });
-
-        channel.subscribe('question_close', () => {
-            document.getElementById('gamepadView').classList.add('hidden');
-            document.getElementById('frozenView').classList.remove('hidden');
-            document.getElementById('frozenMessage').innerText = "Wait for the leaderboard...";
-            studentAnswerLocked = true;
-        });
-
-        channel.subscribe('reveal_answer', (msg) => {
-            document.getElementById('frozenMessage').innerText = `Correct Answer: ${msg.data.correct}`;
-        });
-
-        channel.subscribe('score_update', (msg) => {
-            if (msg.data.nickname === myPlayer.nickname) {
-                myPlayer.score = msg.data.newScore;
-                document.getElementById('studentScore').innerText = myPlayer.score;
-            }
-        });
-
-        document.querySelectorAll('.choice-btn').forEach(btn => {
-            btn.onclick = () => {
-                if (studentAnswerLocked || !currentStudentQuestion) return;
-                const choice = btn.dataset.choice;
-                const timeElapsed = (Date.now() - currentStudentQuestion.localStartTime) / 1000;
-                studentAnswerLocked = true;
-                document.querySelectorAll('.choice-btn').forEach(b => { b.classList.add('frozen'); b.disabled = true; });
-                document.getElementById('gamepadStatusText').innerText = "Answer locked!";
-                channel.publish('submission', { nickname: myPlayer.nickname, choice, timeElapsed, qIndex: currentStudentQuestion.index });
-            };
-        });
-    }
-</script>
-</body>
-</html> 
-<script>
-    const ABLY_API_KEY = 'LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
-    let ably = null, channel = null, currentRoomId = '';
-    let myPlayer = null, teacherPlayers = new Map();
-    let currentQuestion = null, questionActive = false, roundDuration = 20, timerInterval = null, questionIndex = 0;
-    let loadedDeck = [], deckIndex = -1, studentAnswerLocked = false, currentStudentQuestion = null, qrScannerInstance = null;
-
-    class PlayerProfile { constructor(n, a) { this.nickname = n; this.avatar = a; this.score = 0; this.infractions = 0; } }
-
-    window.addEventListener('load', () => {
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        if (params.get('role') === 'teacher') {
-            currentRoomId = params.get('room') || 'QUIZ' + Math.floor(1000 + Math.random() * 9000);
-            initTeacher();
-        } else {
-            currentRoomId = params.get('room') || '';
-            initStudent();
-        }
-    });
-
-    function initTeacher() {
-        document.getElementById('teacherApp').classList.remove('hidden');
-        document.getElementById('roomBadge').innerText = `ROOM: ${currentRoomId}`;
-        const joinLink = `${window.location.origin}${window.location.pathname}#role=student&room=${currentRoomId}`;
-        new QRCode(document.getElementById("qrcodeContainer"), { text: joinLink, width: 180, height: 180 });
-
-        const savedDeckJSON = localStorage.getItem('trivia_deck_json');
-        if (savedDeckJSON) {
-            document.getElementById('jsonInput').value = savedDeckJSON;
-            if (localStorage.getItem('trivia_deck_name')) document.getElementById('deckNameInput').value = localStorage.getItem('trivia_deck_name');
-            try {
-                loadedDeck = JSON.parse(savedDeckJSON);
-                document.getElementById('deckStatus').innerText = `Auto-loaded: ${loadedDeck.length} qs.`;
-                document.getElementById('deckStatus').className = "text-xs text-center mt-2 text-emerald-400 font-bold";
-            } catch(e) {}
-        }
-
-        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: 'teacher' });
-        channel = ably.channels.get(`room_${currentRoomId}`);
-
-        ably.connection.on('connected', () => {
-            channel.subscribe('player_join', (msg) => {
-                const { nickname, avatar } = msg.data;
-                if (teacherPlayers.size >= 200) return channel.publish('join_ack', { nickname, success: false, reason: 'Room full' });
-                if (teacherPlayers.has(nickname)) return channel.publish('join_ack', { nickname, success: false, reason: 'Name taken' });
-                teacherPlayers.set(nickname, new PlayerProfile(nickname, avatar));
-                channel.publish('join_ack', { nickname, success: true });
-                updateTeacherUI();
-            });
-
-            channel.subscribe('submission', (msg) => {
-                const { nickname, choice, timeElapsed, qIndex } = msg.data;
-                if (!questionActive || qIndex !== questionIndex) return;
-                const player = teacherPlayers.get(nickname);
-                if (!player) return;
-                let points = 0;
-                if (choice === currentQuestion.correct) {
-                    points = (timeElapsed <= 10) ? currentQuestion.baseMarks : Math.round(currentQuestion.baseMarks * (1 - 0.5 * Math.min((timeElapsed - 10) / Math.max(1, roundDuration - 10), 1)));
-                } else {
-                    points = -Math.abs(currentQuestion.penalty);
-                }
-                player.score += points;
-                channel.publish('score_update', { nickname, newScore: player.score });
-                updateTeacherUI();
-            });
-
-            channel.subscribe('cheat_flag', (msg) => {
-                const player = teacherPlayers.get(msg.data.nickname);
-                if (player) { player.infractions++; player.score -= 25; channel.publish('score_update', { nickname: player.nickname, newScore: player.score }); updateTeacherUI(); }
-            });
-        });
-
-        document.getElementById('saveDeckBtn').onclick = () => {
-            try {
-                const raw = document.getElementById('jsonInput').value;
-                loadedDeck = JSON.parse(raw);
-                if (!Array.isArray(loadedDeck) || loadedDeck.length === 0) throw new Error();
-                deckIndex = -1;
-                localStorage.setItem('trivia_deck_json', raw);
-                localStorage.setItem('trivia_deck_name', document.getElementById('deckNameInput').value || 'Unnamed');
-                document.getElementById('deckStatus').innerText = `Saved: ${loadedDeck.length} qs.`;
-                document.getElementById('deckStatus').className = "text-xs text-center mt-2 text-emerald-400 font-bold";
-                alert(`Deck saved!`);
-            } catch (e) { alert("Invalid JSON format."); }
-        };
-
-        document.getElementById('resultsSetupBtn').onclick = () => {
-            document.getElementById('resultsView').classList.add('hidden');
-            document.getElementById('resultsView').classList.remove('flex');
-            document.getElementById('setupView').classList.remove('hidden');
-            document.getElementById('setupView').classList.add('grid');
-        };
-
-        document.getElementById('resultsNextBtn').onclick = () => {
-            document.getElementById('resultsSetupBtn').click();
-            document.getElementById('loadNextBtn').click();
-            document.getElementById('broadcastBtn').click();
-        };
-
-        document.getElementById('loadNextBtn').onclick = () => {
-            deckIndex++;
-            if (deckIndex >= loadedDeck.length) return alert("End of deck!");
-            const q = loadedDeck[deckIndex];
-            document.getElementById('questionText').value = q.q || "";
-            document.getElementById('choiceA').value = q.a || "";
-            document.getElementById('choiceB').value = q.b || "";
-            document.getElementById('choiceC').value = q.c || "";
-            document.getElementById('choiceD').value = q.d || "";
-            document.getElementById('correctChoiceSelect').value = q.correct || "A";
-            document.getElementById('durationInput').value = q.time || 20;
-            document.getElementById('baseMarksInput').value = q.base || 100;
-            document.getElementById('penaltyInput').value = q.pen || 50;
-            document.getElementById('loadNextBtn').innerText = `Next Q (${deckIndex + 1}/${loadedDeck.length}) ▶`;
-        };
-
-        document.getElementById('skipTimerBtn').onclick = () => {
-            if (timerInterval) clearInterval(timerInterval);
-            endRoundAndShowLeaderboard();
-        };
-
-        document.getElementById('broadcastBtn').onclick = () => {
-            currentQuestion = {
-                text: document.getElementById('questionText').value,
-                A: document.getElementById('choiceA').value,
-                B: document.getElementById('choiceB').value,
-                C: document.getElementById('choiceC').value,
-                D: document.getElementById('choiceD').value,
-                correct: document.getElementById('correctChoiceSelect').value,
-                baseMarks: parseInt(document.getElementById('baseMarksInput').value),
-                penalty: parseInt(document.getElementById('penaltyInput').value)
-            };
-            roundDuration = parseInt(document.getElementById('durationInput').value);
-            questionIndex++; questionActive = true;
-
-            document.getElementById('projQNum').innerText = questionIndex;
-            document.getElementById('projQText').innerText = currentQuestion.text;
-            document.getElementById('projOptA').innerText = currentQuestion.A;
-            document.getElementById('projOptB').innerText = currentQuestion.B;
-            document.getElementById('projOptC').innerText = currentQuestion.C;
-            document.getElementById('projOptD').innerText = currentQuestion.D;
-            
-            ['A','B','C','D'].forEach(opt => document.getElementById(`projBox${opt}`).classList.remove('correct-glow'));
-
-            document.getElementById('setupView').classList.add('hidden');
-            document.getElementById('projectorView').classList.remove('hidden');
-            document.getElementById('projectorView').classList.add('flex');
-            
-            channel.publish('question_start', { index: questionIndex, text: currentQuestion.text, duration: roundDuration, choices: { A: currentQuestion.A, B: currentQuestion.B, C: currentQuestion.C, D: currentQuestion.D } });
-
-            let timeLeft = roundDuration;
-            document.getElementById('projClock').innerText = timeLeft;
-            clearInterval(timerInterval);
-            timerInterval = setInterval(() => {
-                timeLeft--; 
-                document.getElementById('projClock').innerText = timeLeft;
-                if (timeLeft <= 0) {
-                    clearInterval(timerInterval);
-                    endRoundAndShowLeaderboard();
-                }
-            }, 1000);
-        };
-
-        function endRoundAndShowLeaderboard() {
-            questionActive = false;
-            channel.publish('question_close', {});
-            
-            const colors = { A: 'projBoxA', B: 'projBoxB', C: 'projBoxC', D: 'projBoxD' };
-            const target = document.getElementById(colors[currentQuestion.correct]);
-            if (target) target.classList.add('correct-glow');
-            
-            setTimeout(() => {
-                document.getElementById('projectorView').classList.add('hidden');
-                document.getElementById('projectorView').classList.remove('flex');
-                document.getElementById('resultsView').classList.remove('hidden');
-                document.getElementById('resultsView').classList.add('flex');
-                buildTop10();
-            }, 2500);
-        }
-    }
-
-    function buildTop10() {
-        const sorted = Array.from(teacherPlayers.values()).sort((a, b) => b.score - a.score).slice(0, 10);
-        const list = document.getElementById('top10List');
-        if (sorted.length === 0) return list.innerHTML = '<div class="text-center text-slate-500 text-2xl">No players yet</div>';
-        
-        list.innerHTML = sorted.map((p, i) => {
-            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-            return `
-            <div class="flex justify-between items-center bg-slate-800 border-l-8 ${i===0?'border-amber-400':i===1?'border-slate-300':i===2?'border-amber-700':'border-slate-700'} px-6 py-4 rounded-xl shadow-lg">
-                <div class="flex items-center gap-4">
-                    <span class="text-3xl w-12 text-center">${medal}</span>
-                    <span class="text-4xl">${p.avatar}</span>
-                    <span class="text-2xl font-bold text-slate-200">${p.nickname}</span>
-                </div>
-                <span class="text-3xl font-mono font-black text-emerald-400">${p.score}</span>
-            </div>`;
-        }).join('');
-    }
-
-    function updateTeacherUI() {
-        document.getElementById('playerCount').innerText = `👥 ${teacherPlayers.size} / 200`;
-    }
-
-    function initStudent() {
-        document.getElementById('studentApp').classList.remove('hidden');
-        const emojis = ['🦊','🐻','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🐤','🐴','🦄','🐋','🐬','🐟','🐠','🦋','🐝','🐞','🦉','🦅','🦆','🦇','🐺','🐗','🐴','🦓','🦒','🐘','🦏','🐊','🐢','🦎','🐍','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐳','🦈','🐆','🐅','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🌱','🌿','☘️','🍀','🎍','🎋','🍃','🍂','🍁','🍄','🌾','💐','🌷','🌹','🌺','🌸'];
-        const grid = document.getElementById('avatarGrid');
-        grid.innerHTML = emojis.map((e, i) => `<div class="avatar-option ${i===0?'selected':''}" data-val="${e}">${e}</div>`).join('');
-        grid.querySelectorAll('.avatar-option').forEach(el => {
-            el.onclick = () => { grid.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected')); el.classList.add('selected'); };
-        });
-
-        document.getElementById('joinLobbyBtn').onclick = () => {
-            const nickname = document.getElementById('nicknameInput').value.trim();
-            const avatar = grid.querySelector('.selected').dataset.val;
-            if (!nickname) return alert('Enter a nickname');
-            if (!currentRoomId) return alert('No Room ID found. Scan QR.');
-            myPlayer = new PlayerProfile(nickname, avatar);
-            document.getElementById('studentAvatarDisplay').innerText = avatar;
-            document.getElementById('studentNickname').innerText = nickname;
-            document.getElementById('joinLobbyBtn').innerText = 'Connecting...';
-            connectStudentToAbly(nickname, avatar);
-        };
-
-        document.getElementById('scanQrBtn').onclick = async () => {
-            const container = document.getElementById('qrScannerContainer');
-            container.classList.remove('hidden');
-            if (!qrScannerInstance) qrScannerInstance = new Html5Qrcode("qrScannerContainer");
-            try {
-                await qrScannerInstance.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } }, (decodedText) => {
-                    const match = decodedText.match(/room=([A-Z0-9]+)/);
-                    if (match && match[1]) {
-                        currentRoomId = match[1]; qrScannerInstance.stop(); container.classList.add('hidden');
-                        document.getElementById('nicknameInput').focus();
-                        alert(`Connected to Room ${currentRoomId}!`);
-                    }
-                });
-            } catch (err) { container.classList.add('hidden'); alert("Camera denied."); }
-        };
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden' && myPlayer && !studentAnswerLocked) {
-                if (channel) channel.publish('cheat_flag', { nickname: myPlayer.nickname });
-                document.getElementById('lockoutOverlay').classList.remove('hidden');
-            }
-        });
-        document.getElementById('dismissLockoutBtn').onclick = () => document.getElementById('lockoutOverlay').classList.add('hidden');
-    }
-
-    function connectStudentToAbly(nickname, avatar) {
-        ably = new Ably.Realtime({ key: ABLY_API_KEY, clientId: nickname });
-        channel = ably.channels.get(`room_${currentRoomId}`);
-
-        ably.connection.on('connected', () => {
-            document.getElementById('connectionStatus').innerText = '● Connected';
-            document.getElementById('connectionStatus').className = 'text-xs bg-emerald-900 text-emerald-300 px-3 py-1 rounded-full border border-emerald-700';
-            channel.publish('player_join', { nickname, avatar });
-        });
-
-        channel.subscribe('join_ack', (msg) => {
-            if (msg.data.nickname === nickname) {
-                if (msg.data.success) {
-                    document.getElementById('lobbyView').classList.add('hidden');
-                    document.getElementById('frozenView').classList.remove('hidden');
-                    document.getElementById('frozenMessage').innerText = "Waiting for teacher...";
-                } else {
-                    alert('Failed: ' + msg.data.reason);
-                    document.getElementById('joinLobbyBtn').innerText = 'JOIN GAME';
-                }
-            }
-        });
-
-        channel.subscribe('question_start', (msg) => {
-            currentStudentQuestion = msg.data;
-            document.getElementById('frozenView').classList.add('hidden');
-            document.getElementById('lobbyView').classList.add('hidden');
-            document.getElementById('gamepadView').classList.remove('hidden');
-            document.getElementById('gamepadQuestionText').innerText = msg.data.text;
-            studentAnswerLocked = false;
-            document.getElementById('gamepadStatusText').innerText = "Tap an answer to submit";
-            document.querySelectorAll('.choice-btn').forEach(btn => { btn.classList.remove('frozen'); btn.disabled = false; });
-            currentStudentQuestion.localStartTime = Date.now();
-        });
-
-        channel.subscribe('question_close', () => {
-            document.getElementById('gamepadView').classList.add('hidden');
-            document.getElementById('frozenView').classList.remove('hidden');
-            document.getElementById('frozenMessage').innerText = "Wait for the leaderboard...";
-            studentAnswerLocked = true;
-        });
-
-        channel.subscribe('reveal_answer', (msg) => {
-            document.getElementById('frozenMessage').innerText = `Correct Answer: ${msg.data.correct}`;
-        });
-
-        channel.subscribe('score_update', (msg) => {
-            if (msg.data.nickname === myPlayer.nickname) {
-                myPlayer.score = msg.data.newScore;
-                document.getElementById('studentScore').innerText = myPlayer.score;
-            }
-        });
-
-        document.querySelectorAll('.choice-btn').forEach(btn => {
-            btn.onclick = () => {
-                if (studentAnswerLocked || !currentStudentQuestion) return;
-                const choice = btn.dataset.choice;
-                const timeElapsed = (Date.now() - currentStudentQuestion.localStartTime) / 1000;
-                studentAnswerLocked = true;
-                document.querySelectorAll('.choice-btn').forEach(b => { b.classList.add('frozen'); b.disabled = true; });
-                document.getElementById('gamepadStatusText').innerText = "Answer locked!";
-                channel.publish('submission', { nickname: myPlayer.nickname, choice, timeElapsed, qIndex: currentStudentQuestion.index });
-            };
-        });
-    }
+const ABLY_API_KEY='LkHPHw.rwxAzw:d0AITZxyyJbZZQx0nxa3HXdOxK0_D1lYDgJN24dEn-U';
+let ably=null,channel=null,currentRoomId='',myPlayer=null,teacherPlayers=new Map(),currentQuestion=null,questionActive=false,roundDuration=20,timerInterval=null,questionIndex=0,loadedDeck=[],deckIndex=-1,studentAnswerLocked=false,currentStudentQuestion=null,qrScannerInstance=null;
+class PlayerProfile{constructor(n,a){this.nickname=n;this.avatar=a;this.score=0;this.infractions=0;}}
+window.addEventListener('load',()=>{const params=new URLSearchParams(window.location.hash.substring(1));if(params.get('role')==='teacher'){currentRoomId=params.get('room')||'QUIZ'+Math.floor(1000+Math.random()*9000);initTeacher();}else{currentRoomId=params.get('room')||'';initStudent();}});
+function initTeacher(){
+document.getElementById('teacherApp').classList.remove('hidden');document.getElementById('roomBadge').innerText=`ROOM: ${currentRoomId}`;
+const joinLink=`${window.location.origin}${window.location.pathname}#role=student&room=${currentRoomId}`;
+new QRCode(document.getElementById("qrcodeContainer"),{text:joinLink,width:180,height:180});
+const savedDeckJSON=localStorage.getItem('trivia_deck_json');
+if(savedDeckJSON){document.getElementById('jsonInput').value=savedDeckJSON;if(localStorage.getItem('trivia_deck_name'))document.getElementById('deckNameInput').value=localStorage.getItem('trivia_deck_name');try{loadedDeck=JSON.parse(savedDeckJSON);document.getElementById('deckStatus').innerText=`Auto-loaded: ${loadedDeck.length} qs.`;document.getElementById('deckStatus').className="text-xs text-center mt-2 text-emerald-400 font-bold";}catch(e){}}
+ably=new Ably.Realtime({key:ABLY_API_KEY,clientId:'teacher'});channel=ably.channels.get(`room_${currentRoomId}`);
+ably.connection.on('connected',()=>{
+channel.subscribe('player_join',(msg)=>{const{nickname,avatar}=msg.data;if(teacherPlayers.size>=200)return channel.publish('join_ack',{nickname,success:false,reason:'Room full'});if(teacherPlayers.has(nickname))return channel.publish('join_ack',{nickname,success:false,reason:'Name taken'});teacherPlayers.set(nickname,new PlayerProfile(nickname,avatar));channel.publish('join_ack',{nickname,success:true});updateTeacherUI();});
+channel.subscribe('submission',(msg)=>{const{nickname,choice,timeElapsed,qIndex}=msg.data;if(!questionActive||qIndex!==questionIndex)return;const player=teacherPlayers.get(nickname);if(!player)return;let points=0;if(choice===currentQuestion.correct){points=(timeElapsed<=10)?currentQuestion.baseMarks:Math.round(currentQuestion.baseMarks*(1-0.5*Math.min((timeElapsed-10)/Math.max(1,roundDuration-10),1)));}else{points=-Math.abs(currentQuestion.penalty);}player.score+=points;channel.publish('score_update',{nickname,newScore:player.score});updateTeacherUI();});
+channel.subscribe('cheat_flag',(msg)=>{const player=teacherPlayers.get(msg.data.nickname);if(player){player.infractions++;player.score-=25;channel.publish('score_update',{nickname:player.nickname,newScore:player.score});updateTeacherUI();}});
+});
+document.getElementById('saveDeckBtn').onclick=()=>{try{const raw=document.getElementById('jsonInput').value;loadedDeck=JSON.parse(raw);if(!Array.isArray(loadedDeck)||loadedDeck.length===0)throw new Error();deckIndex=-1;localStorage.setItem('trivia_deck_json',raw);localStorage.setItem('trivia_deck_name',document.getElementById('deckNameInput').value||'Unnamed');document.getElementById('deckStatus').innerText=`Saved: ${loadedDeck.length} qs.`;document.getElementById('deckStatus').className="text-xs text-center mt-2 text-emerald-400 font-bold";alert(`Deck saved!`);}catch(e){alert("Invalid JSON format.");}};
+document.getElementById('resultsSetupBtn').onclick=()=>{document.getElementById('resultsView').classList.add('hidden');document.getElementById('resultsView').classList.remove('flex');document.getElementById('setupView').classList.remove('hidden');document.getElementById('setupView').classList.add('grid');};
+document.getElementById('resultsNextBtn').onclick=()=>{document.getElementById('resultsSetupBtn').click();document.getElementById('loadNextBtn').click();document.getElementById('broadcastBtn').click();};
+document.getElementById('loadNextBtn').onclick=()=>{deckIndex++;if(deckIndex>=loadedDeck.length)return alert("End of deck!");const q=loadedDeck[deckIndex];document.getElementById('questionText').value=q.q||"";document.getElementById('choiceA').value=q.a||"";document.getElementById('choiceB').value=q.b||"";document.getElementById('choiceC').value=q.c||"";document.getElementById('choiceD').value=q.d||"";document.getElementById('correctChoiceSelect').value=q.correct||"A";document.getElementById('durationInput').value=q.time||20;document.getElementById('baseMarksInput').value=q.base||100;document.getElementById('penaltyInput').value=q.pen||50;document.getElementById('loadNextBtn').innerText=`Next Q (${deckIndex+1}/${loadedDeck.length}) ▶`;};
+document.getElementById('skipTimerBtn').onclick=()=>{if(timerInterval)clearInterval(timerInterval);endRoundAndShowLeaderboard();};
+document.getElementById('broadcastBtn').onclick=()=>{
+currentQuestion={text:document.getElementById('questionText').value,A:document.getElementById('choiceA').value,B:document.getElementById('choiceB').value,C:document.getElementById('choiceC').value,D:document.getElementById('choiceD').value,correct:document.getElementById('correctChoiceSelect').value,baseMarks:parseInt(document.getElementById('baseMarksInput').value),penalty:parseInt(document.getElementById('penaltyInput').value)};
+roundDuration=parseInt(document.getElementById('durationInput').value);questionIndex++;questionActive=true;
+document.getElementById('projQNum').innerText=questionIndex;document.getElementById('projQText').innerText=currentQuestion.text;document.getElementById('projOptA').innerText=currentQuestion.A;document.getElementById('projOptB').innerText=currentQuestion.B;document.getElementById('projOptC').innerText=currentQuestion.C;document.getElementById('projOptD').innerText=currentQuestion.D;
+['A','B','C','D'].forEach(opt=>document.getElementById(`projBox${opt}`).classList.remove('correct-glow'));
+document.getElementById('setupView').classList.add('hidden');document.getElementById('projectorView').classList.remove('hidden');document.getElementById('projectorView').classList.add('flex');
+channel.publish('question_start',{index:questionIndex,text:currentQuestion.text,duration:roundDuration,choices:{A:currentQuestion.A,B:currentQuestion.B,C:currentQuestion.C,D:currentQuestion.D}});
+let timeLeft=roundDuration;document.getElementById('projClock').innerText=timeLeft;clearInterval(timerInterval);
+timerInterval=setInterval(()=>{timeLeft--;document.getElementById('projClock').innerText=timeLeft;if(timeLeft<=0){clearInterval(timerInterval);endRoundAndShowLeaderboard();}},1000);
+};
+function endRoundAndShowLeaderboard(){
+questionActive=false;channel.publish('question_close',{});
+const colors={A:'projBoxA',B:'projBoxB',C:'projBoxC',D:'projBoxD'};const target=document.getElementById(colors[currentQuestion.correct]);if(target)target.classList.add('correct-glow');
+setTimeout(()=>{document.getElementById('projectorView').classList.add('hidden');document.getElementById('projectorView').classList.remove('flex');document.getElementById('resultsView').classList.remove('hidden');document.getElementById('resultsView').classList.add('flex');buildTop10();},2500);
+}
+}
+function buildTop10(){
+const sorted=Array.from(teacherPlayers.values()).sort((a,b)=>b.score-a.score).slice(0,10);const list=document.getElementById('top10List');
+if(sorted.length===0)return list.innerHTML='<div class="text-center text-slate-500 text-2xl">No players yet</div>';
+list.innerHTML=sorted.map((p,i)=>{const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`;return`<div class="flex justify-between items-center bg-slate-800 border-l-8 ${i===0?'border-amber-400':i===1?'border-slate-300':i===2?'border-amber-700':'border-slate-700'} px-6 py-4 rounded-xl shadow-lg"><div class="flex items-center gap-4"><span class="text-3xl w-12 text-center">${medal}</span><span class="text-4xl">${p.avatar}</span><span class="text-2xl font-bold text-slate-200">${p.nickname}</span></div><span class="text-3xl font-mono font-black text-emerald-400">${p.score}</span></div>`;}).join('');
+}
+function updateTeacherUI(){document.getElementById('playerCount').innerText=`👥 ${teacherPlayers.size} / 200`;}
+function initStudent(){
+document.getElementById('studentApp').classList.remove('hidden');
+const emojis=['🦊','🐻','🐼','🐨','🦁','🐯','🐸','🐵','🐧','🐦','🐤','🐴','🦄','🐋','🐬','🐟','🐠','🦋','🐝','🐞','🦉','🦅','🦆','🦇','🐺','🐗','🐴','🦓','🦒','🐘','🦏','🐊','🐢','🦎','🐍','🦖','🦕','🐙','🦑','🦐','🦞','🦀','🐡','🐳','🦈','🐆','🐅','🐃','🐂','🐄','🐎','🐖','🐏','🐑','🦙','🐐','🦌','🐕','🐩','🦮','🐈','🐓','🦃','🦚','🦜','🦢','🦩','🕊️','🐇','🦝','🦨','🦡','🦦','🦥','🐁','🐀','🐿️','🦔','🐾','🐉','🐲','🌵','🎄','🌲','🌳','🌴','🌱','🌿','☘️','🍀','🎍','🎋','🍃','🍂','🍁','🍄','🌾','💐','🌷','🌹','🌺','🌸'];
+const grid=document.getElementById('avatarGrid');grid.innerHTML=emojis.map((e,i)=>`<div class="avatar-option ${i===0?'selected':''}" data-val="${e}">${e}</div>`).join('');
+grid.querySelectorAll('.avatar-option').forEach(el=>{el.onclick=()=>{grid.querySelectorAll('.avatar-option').forEach(o=>o.classList.remove('selected'));el.classList.add('selected');};});
+document.getElementById('joinLobbyBtn').onclick=()=>{const nickname=document.getElementById('nicknameInput').value.trim();const avatar=grid.querySelector('.selected').dataset.val;if(!nickname)return alert('Enter a nickname');if(!currentRoomId)return alert('No Room ID found. Scan QR.');myPlayer=new PlayerProfile(nickname,avatar);document.getElementById('studentAvatarDisplay').innerText=avatar;document.getElementById('studentNickname').innerText=nickname;document.getElementById('joinLobbyBtn').innerText='Connecting...';connectStudentToAbly(nickname,avatar);};
+document.getElementById('scanQrBtn').onclick=async()=>{const container=document.getElementById('qrScannerContainer');container.classList.remove('hidden');if(!qrScannerInstance)qrScannerInstance=new Html5Qrcode("qrScannerContainer");try{await qrScannerInstance.start({facingMode:"environment"},{fps:10,qrbox:{width:250,height:250}},(decodedText)=>{const match=decodedText.match(/room=([A-Z0-9]+)/);if(match&&match[1]){currentRoomId=match[1];qrScannerInstance.stop();container.classList.add('hidden');document.getElementById('nicknameInput').focus();alert(`Connected to Room ${currentRoomId}!`);}});}catch(err){container.classList.add('hidden');alert("Camera denied.");}};
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&myPlayer&&!studentAnswerLocked){if(channel)channel.publish('cheat_flag',{nickname:myPlayer.nickname});document.getElementById('lockoutOverlay').classList.remove('hidden');}});
+document.getElementById('dismissLockoutBtn').onclick=()=>document.getElementById('lockoutOverlay').classList.add('hidden');
+}
+function connectStudentToAbly(nickname,avatar){
+ably=new Ably.Realtime({key:ABLY_API_KEY,clientId:nickname});channel=ably.channels.get(`room_${currentRoomId}`);
+ably.connection.on('connected',()=>{document.getElementById('connectionStatus').innerText='● Connected';document.getElementById('connectionStatus').className='text-xs bg-emerald-900 text-emerald-300 px-3 py-1 rounded-full border border-emerald-700';channel.publish('player_join',{nickname,avatar});});
+channel.subscribe('join_ack',(msg)=>{if(msg.data.nickname===nickname){if(msg.data.success){document.getElementById('lobbyView').classList.add('hidden');document.getElementById('frozenView').classList.remove('hidden');document.getElementById('frozenMessage').innerText="Waiting for teacher...";}else{alert('Failed: '+msg.data.reason);document.getElementById('joinLobbyBtn').innerText='JOIN GAME';}}});
+channel.subscribe('question_start',(msg)=>{currentStudentQuestion=msg.data;document.getElementById('frozenView').classList.add('hidden');document.getElementById('lobbyView').classList.add('hidden');document.getElementById('gamepadView').classList.remove('hidden');document.getElementById('gamepadQuestionText').innerText=msg.data.text;studentAnswerLocked=false;document.getElementById('gamepadStatusText').innerText="Tap an answer to submit";document.querySelectorAll('.choice-btn').forEach(btn=>{btn.classList.remove('frozen');btn.disabled=false;});currentStudentQuestion.localStartTime=Date.now();});
+channel.subscribe('question_close',()=>{document.getElementById('gamepadView').classList.add('hidden');document.getElementById('frozenView').classList.remove('hidden');document.getElementById('frozenMessage').innerText="Wait for the leaderboard...";studentAnswerLocked=true;});
+channel.subscribe('reveal_answer',(msg)=>{document.getElementById('frozenMessage').innerText=`Correct Answer: ${msg.data.correct}`;});
+channel.subscribe('score_update',(msg)=>{if(msg.data.nickname===myPlayer.nickname){myPlayer.score=msg.data.newScore;document.getElementById('studentScore').innerText=myPlayer.score;}});
+document.querySelectorAll('.choice-btn').forEach(btn=>{btn.onclick=()=>{if(studentAnswerLocked||!currentStudentQuestion)return;const choice=btn.dataset.choice;const timeElapsed=(Date.now()-currentStudentQuestion.localStartTime)/1000;studentAnswerLocked=true;document.querySelectorAll('.choice-btn').forEach(b=>{b.classList.add('frozen');b.disabled=true;});document.getElementById('gamepadStatusText').innerText="Answer locked!";channel.publish('submission',{nickname:myPlayer.nickname,choice,timeElapsed,qIndex:currentStudentQuestion.index});};});
+}
 </script>
 </body>
 </html>
